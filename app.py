@@ -11,14 +11,11 @@ st.set_page_config(
 )
 
 
-# Función para convertir imagen local a base64 (para fondos/logos CSS)
-def get_base64_of_bin_file(bin_file):
-    try:
-        with open(bin_file, "rb") as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    except Exception:
-        return ""
+# Función para convertir imágenes locales a formato Base64
+def get_base64_image(file_path):
+    with open(file_path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
 
 
 # Estilos CSS personalizados inspirados en la identidad visual de COLMEDICOS
@@ -79,8 +76,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- SIDEBAR: LOGO DE LA EMPRESA Y FILTROS ---
-st.sidebar.image("input_file_2.png", use_container_width=True)
+# Carga del logo transparente de Colmedicos
+st.sidebar.image("logo_colmedicos.png", use_container_width=True)
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Filtros Operativos")
 
@@ -155,12 +152,44 @@ if sedes_seleccionadas and col_sede:
 if servicios_seleccionados:
     df_f = df_f[df_f["Servicio"].isin(servicios_seleccionados)]
 
-# --- CABECERA CORPORATIVA ---
+# Convertir el archivo del banner guardado en el repositorio
+banner_b64 = get_base64_image("banner_colmedicos.png")
+
+# Renderizar el banner con la imagen de fondo de Colmedicos
 st.markdown(
-    """
-    <div class="header-container">
-        <div class="header-title">Control de Salidas No Conformes (SNC)</div>
-        <div class="header-subtitle">Monitoreo del Sistema de Gestión de Calidad | <span>Las personas son nuestra razón de ser</span></div>
+    f"""
+    <style>
+    .custom-banner {{
+        background-image: linear-gradient(rgba(26, 43, 109, 0.75), rgba(26, 43, 109, 0.85)), url("data:image/png;base64,{banner_b64}");
+        background-size: cover;
+        background-position: center;
+        padding: 30px;
+        border-radius: 10px;
+        color: white;
+        margin-bottom: 25px;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.15);
+    }}
+    .banner-title {{
+        font-size: 28px;
+        font-weight: 700;
+        color: #FFFFFF;
+        margin: 0;
+    }}
+    .banner-subtitle {{
+        font-size: 15px;
+        color: #FFFFFF;
+        margin-top: 6px;
+    }}
+    .banner-highlight {{
+        color: #F58220;
+        font-weight: 600;
+        font-style: italic;
+    }}
+    </style>
+    
+    <div class="custom-banner">
+        <div class="banner-title">Control de Salidas No Conformes (SNC)</div>
+        <div class="banner-subtitle">Monitoreo del Sistema de Gestión de Calidad | <span class="banner-highlight">Las personas son nuestra razón de ser</span></div>
     </div>
 """,
     unsafe_allow_html=True,
