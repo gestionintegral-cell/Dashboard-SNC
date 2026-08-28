@@ -473,12 +473,8 @@ if gemini_key:
                 """
 
                 try:
-                    # Intento con modelos soportados según la API disponible
-                    model_name = "gemini-2.0-flash"
-                    try:
-                        model = genai.GenerativeModel(model_name)
-                    except Exception:
-                        model = genai.GenerativeModel("gemini-1.5-flash-8b")
+                    # Usar la versión activa indicada directamente por la API
+                    model = genai.GenerativeModel("gemini-3.6-flash")
 
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta del usuario: {user_prompt}"
