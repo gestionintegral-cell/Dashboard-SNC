@@ -19,13 +19,11 @@ st.title("📊 Dashboard de Gestión de Calidad (SNC) - COLMEDICOS")
 # ---------------------------------------------------------
 @st.cache_data(ttl=600)
 def cargar_datos():
-    # URL corregida convertida a formato exportable CSV
     url_csv = "https://docs.google.com/spreadsheets/d/1N9So7ddadDxy2TPhpZZUsnqlLUn6my-FvByFg3dOYf0/export?format=csv&gid=935748465"
     
     try:
         df = pd.read_csv(url_csv)
     except Exception:
-        # Fallback si se usa un archivo local en Excel
         df = pd.read_excel("F-CAL-08 Control de salidas no conformes - SNC.xlsx")
         
     return df
@@ -39,22 +37,43 @@ except Exception as e:
 # Copia de trabajo
 df = df_raw.copy()
 
-# ---------------------------------------------------------
-# 3. LIMPIEZA Y NORMALIZACIÓN DE DATOS (CORRECCIÓN ESTADO)
-# ---------------------------------------------------------
 # Normalizamos los nombres de las columnas quitando espacios iniciales/finales
 df.columns = [str(c).strip() for c in df.columns]
 
-# --- CORRECCIÓN CLAVE DE NOMBRES Y ESPACIOS EN ESTADO ---
-if 'Estado' in df.columns:
-    # Convertimos a texto, quitamos espacios invisibles antes/después y pasamos a mayúsculas
+# ---------------------------------------------------------
+# 3. BUSQUEDA FLEXIBLE DE LA COLUMNA ESTADO
+# ---------------------------------------------------------
+col_estado = None
+for col in df.columns:
+    if col.lower().strip() == "estado":
+        col_estado = col
+        break
+
+# Si no es coincidencia exacta "estado", busca una columna que contenga la palabra "estado"
+if not col_estado:
+    for col in df.columns:
+        if "estado" in col.lower():
+            col_estado = col
+            break
+
+if col_estado:
+    # Renombramos a 'Estado' estandarizado
+    df.rename(columns={col_estado: 'Estado'}, inplace=True)
     df['Estado'] = df['Estado'].fillna('').astype(str).str.strip().str.upper()
 else:
-    st.error("La columna 'Estado' no fue encontrada en el archivo. Verifica los encabezados.")
+    st.error("⚠️ No se encontró la columna 'Estado'. A continuación ves los nombres de columnas leídos en tu archivo:")
+    st.write(list(df.columns))
     st.stop()
 
-# Limpieza general de columnas de clasificación si existen
-if 'Clasificacion' in df.columns:
+# Búsqueda flexible de Clasificación
+col_clasif = None
+for col in df.columns:
+    if "clasificac" in col.lower():
+        col_clasif = col
+        break
+
+if col_clasif:
+    df.rename(columns={col_clasif: 'Clasificacion'}, inplace=True)
     df['Clasificacion'] = df['Clasificacion'].fillna('').astype(str).str.strip().str.upper()
 
 # Crear columna combinada para búsqueda rápida en el Chatbot
@@ -91,7 +110,7 @@ total_registros = len(df_f)
 cerrados = (df_f['Estado'] == 'CERRADA').sum()
 pendientes = (df_f['Estado'] == 'ABIERTA').sum()
 
-# Si por alguna razón hay estados distintos a ABIERTA/CERRADA, se contabilizan como pendientes
+# Si por alguna razón hay estados distintos a ABIERTA/CERRADA, se contabilizan en pendientes
 otros_estados = total_registros - (cerrados + pendientes)
 if otros_estados > 0:
     pendientes += otros_estados
@@ -124,7 +143,7 @@ with col4:
 st.markdown("---")
 
 # ---------------------------------------------------------
-# 7. CHATBOT FLOTANTE OPTIMIZADO (STREAMING + RAPIDEZ)
+# 7. CHATBOT FLOTANTE OPTIMIZADO (GEMINI-3.6-FLASH CON STREAMING)
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
@@ -230,7 +249,6 @@ with st.popover("💬 Asistente IA SNC"):
                 """
 
                 try:
-                    # Se usa gemini-3.6-flash optimizado con respuesta por streaming
                     model = genai.GenerativeModel("gemini-3.6-flash")
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta: {user_prompt}"
