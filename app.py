@@ -19,12 +19,24 @@ st.title("📊 Dashboard de Gestión de Calidad (SNC) - COLMEDICOS")
 # ---------------------------------------------------------
 @st.cache_data(ttl=600)
 def cargar_datos():
-    url_csv = "https://docs.google.com/spreadsheets/d/1N9So7ddadDxy2TPhpZZUsnqlLUn6my-FvByFg3dOYf0/export?format=csv&gid=935748465"
+    sheet_id = "1N9So7ddadDxy2TPhpZZUsnqlLUn6my-FvByFg3dOYf0"
     
+    # OPCIÓN A: Si descargas directamente desde el gid de la pestaña
+    # Reemplaza 'gid=935748465' por el gid real de la pestaña de los datos (aparece al final de la URL en el navegador)
+    url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=935748465"
+    
+    # OPCIÓN B: Especificar la pestaña por su NOMBRE exacto si el gid falla:
+    # nombre_pestana = "Hoja 1"  # <--- Cambia esto por el nombre de la pestaña de datos
+    # url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={nombre_pestana}"
+
     try:
         df = pd.read_csv(url_csv)
     except Exception:
-        df = pd.read_excel("F-CAL-08 Control de salidas no conformes - SNC.xlsx")
+        # En Excel local, leemos la segunda pestaña o la nombramos directamente
+        excel_file = pd.ExcelFile("F-CAL-08 Control de salidas no conformes - SNC.xlsx")
+        # Selecciona la segunda pestaña disponible si la primera es el glosario
+        sheet_name_to_use = excel_file.sheet_names[1] if len(excel_file.sheet_names) > 1 else 0
+        df = pd.read_excel(excel_file, sheet_name=sheet_name_to_use)
         
     return df
 
@@ -41,7 +53,7 @@ df = df_raw.copy()
 df.columns = [str(c).strip() for c in df.columns]
 
 # ---------------------------------------------------------
-# 3. BUSQUEDA FLEXIBLE DE LA COLUMNA ESTADO
+# 3. BÚSQUEDA FLEXIBLE DE LA COLUMNA ESTADO
 # ---------------------------------------------------------
 col_estado = None
 for col in df.columns:
@@ -49,7 +61,6 @@ for col in df.columns:
         col_estado = col
         break
 
-# Si no es coincidencia exacta "estado", busca una columna que contenga la palabra "estado"
 if not col_estado:
     for col in df.columns:
         if "estado" in col.lower():
@@ -57,11 +68,10 @@ if not col_estado:
             break
 
 if col_estado:
-    # Renombramos a 'Estado' estandarizado
     df.rename(columns={col_estado: 'Estado'}, inplace=True)
     df['Estado'] = df['Estado'].fillna('').astype(str).str.strip().str.upper()
 else:
-    st.error("⚠️ No se encontró la columna 'Estado'. A continuación ves los nombres de columnas leídos en tu archivo:")
+    st.error("⚠️ No se encontró la columna 'Estado'. A continuación ves los nombres de columnas leídos en tu pestaña actual:")
     st.write(list(df.columns))
     st.stop()
 
@@ -102,7 +112,7 @@ else:
     df_f = df.copy()
 
 # ---------------------------------------------------------
-# 5. CÁLCULO DE MÉTRICAS GENERALES (CORREGIDO)
+# 5. CÁLCULO DE MÉTRICAS GENERALES
 # ---------------------------------------------------------
 total_registros = len(df_f)
 
@@ -110,12 +120,12 @@ total_registros = len(df_f)
 cerrados = (df_f['Estado'] == 'CERRADA').sum()
 pendientes = (df_f['Estado'] == 'ABIERTA').sum()
 
-# Si por alguna razón hay estados distintos a ABIERTA/CERRADA, se contabilizan en pendientes
+# Si hay estados distintos a ABIERTA/CERRADA, los suma a pendientes
 otros_estados = total_registros - (cerrados + pendientes)
 if otros_estados > 0:
     pendientes += otros_estados
 
-# Cálculo preciso de Tasa de Cierre
+# Cálculo de Tasa de Cierre
 tasa_cierre = (cerrados / total_registros * 100) if total_registros > 0 else 0.0
 
 # Conteo de Clasificaciones (Incidentes / Coyunturales)
@@ -143,7 +153,7 @@ with col4:
 st.markdown("---")
 
 # ---------------------------------------------------------
-# 7. CHATBOT FLOTANTE OPTIMIZADO (GEMINI-3.6-FLASH CON STREAMING)
+# 7. CHATBOT FLOTANTE OPTIMIZADO
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
