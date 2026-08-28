@@ -40,6 +40,23 @@ def get_base64_image(ruta_archivo):
     return ""
 
 
+def es_afirmativo(val):
+    """Normaliza y valida valores booleanos/afirmativos ignorando tildes y espacios."""
+    if pd.isna(val):
+        return False
+    val_str = (
+        str(val)
+        .strip()
+        .upper()
+        .replace("Í", "I")
+        .replace("Á", "A")
+        .replace("É", "E")
+        .replace("Ó", "O")
+        .replace("Ú", "U")
+    )
+    return val_str in ["SI", "S", "TRUE", "1", "YES"]
+
+
 # ---------------------------------------------------------
 # 3. ESTILOS CSS PERSONALIZADOS & BOTÓN CHAT FLOTANTE
 # ---------------------------------------------------------
@@ -137,7 +154,7 @@ def cargar_base_datos():
         df_hoja["Servicio"] = hoja
         registros.append(df_hoja)
 
-    df_total = pd.concat(registros, ignore_index=True)
+    df_total = pd.concat(registros, ignore_ignore_index=True if "ignore_index" in pd.concat.__doc__ else False, ignore_index=True)
 
     for col in df_total.columns:
         if df_total[col].dtype == "object":
@@ -175,7 +192,7 @@ col_coyuntural = [
 ]
 col_incidente = [c for c in df.columns if "incidente" in c.lower()]
 col_proceso = [
-    c for c in df.columns if "proceso" in c.lower() or "área" in c.lower()
+    c for c in df.columns if "proceso" in c.lower() or "área" in c.lower() or "area" in c.lower()
 ]
 col_colaborador = [c for c in df.columns if "colaborador" in c.lower()]
 col_momento = [c for c in df.columns if "momento" in c.lower()]
@@ -184,7 +201,7 @@ col_desc = [
 ]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS
+# 7. FILTROS DINÁMICOS GLOBAL DE LA SIDEBAR
 # ---------------------------------------------------------
 sedes_disponibles = list(df[col_sede[0]].dropna().unique()) if col_sede else []
 servicios_disponibles = list(df["Servicio"].dropna().unique())
@@ -253,18 +270,18 @@ else:
 # ---------------------------------------------------------
 total_eventos = len(df_f)
 cerrados = (
-    len(df_f[df_f[col_estado[0]].astype(str).str.upper() == "SÍ"])
+    len(df_f[df_f[col_estado[0]].apply(es_afirmativo)])
     if col_estado
     else 0
 )
 pendientes = total_eventos - cerrados
 coyunturales = (
-    len(df_f[df_f[col_coyuntural[0]].astype(str).str.upper() == "SÍ"])
+    len(df_f[df_f[col_coyuntural[0]].apply(es_afirmativo)])
     if col_coyuntural
     else 0
 )
 incidentes = (
-    len(df_f[df_f[col_incidente[0]].astype(str).str.upper() == "SÍ"])
+    len(df_f[df_f[col_incidente[0]].apply(es_afirmativo)])
     if col_incidente
     else 0
 )
@@ -315,13 +332,13 @@ segmento = st.radio(
 )
 
 if segmento == "Pendientes" and col_estado:
-    df_v = df_f[df_f[col_estado[0]].astype(str).str.upper() != "SÍ"]
+    df_v = df_f[~df_f[col_estado[0]].apply(es_afirmativo)]
 elif segmento == "Cerrados" and col_estado:
-    df_v = df_f[df_f[col_estado[0]].astype(str).str.upper() == "SÍ"]
+    df_v = df_f[df_f[col_estado[0]].apply(es_afirmativo)]
 elif segmento == "Con acción coyuntural" and col_coyuntural:
-    df_v = df_f[df_f[col_coyuntural[0]].astype(str).str.upper() == "SÍ"]
+    df_v = df_f[df_f[col_coyuntural[0]].apply(es_afirmativo)]
 elif segmento == "Incidentes" and col_incidente:
-    df_v = df_f[df_f[col_incidente[0]].astype(str).str.upper() == "SÍ"]
+    df_v = df_f[df_f[col_incidente[0]].apply(es_afirmativo)]
 else:
     df_v = df_f.copy()
 
@@ -340,65 +357,94 @@ t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
 )
 
 with t_procesos:
+    st.markdown("##### Selección de servicio a detallar")
+    servicios_proceso_opt = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
+    servicio_focal = st.selectbox(
+        "Filtrar análisis por servicio:",
+        options=servicios_proceso_opt,
+        key="sb_analisis_proceso"
+    )
+    
+    df_proc_view = (
+        df_v[df_v["Servicio"] == servicio_focal]
+        if servicio_focal != "Todos los servicios"
+        else df_v.copy()
+    )
+
     col_left, col_right = st.columns(2)
     with col_left:
         st.markdown("##### Incidencias por Área / Proceso Específico")
-        servicio_focal = st.selectbox(
-            "Seleccionar servicio a detallar:",
-            options=["Todos los servicios"] + list(df_v["Servicio"].unique()),
-        )
-        df_proc_view = (
-            df_v[df_v["Servicio"] == servicio_focal]
-            if servicio_focal != "Todos los servicios"
-            else df_v.copy()
-        )
-
         if col_proceso:
+            # Filtrar vacíos o sin especificar
+            df_p_data = df_proc_view[df_proc_view[col_proceso[0]].astype(str).str.strip() != ""].copy()
+            df_p_data = df_p_data[df_p_data[col_proceso[0]].notna()]
+            
             df_p = (
-                df_proc_view[col_proceso[0]]
+                df_p_data[col_proceso[0]]
                 .value_counts()
                 .reset_index()
                 .head(10)
             )
             df_p.columns = ["Proceso / Área", "Eventos"]
-            fig_p = px.bar(
-                df_p,
-                x="Eventos",
-                y="Proceso / Área",
-                orientation="h",
-                color="Eventos",
-                color_continuous_scale=["#B3C5E7", "#1A2B6D"],
-            )
-            fig_p.update_layout(
-                yaxis={"categoryorder": "total ascending"},
-                margin=dict(l=0, r=20, t=20, b=20),
-            )
-            st.plotly_chart(fig_p, use_container_width=True)
+            
+            if not df_p.empty:
+                fig_p = px.bar(
+                    df_p,
+                    x="Eventos",
+                    y="Proceso / Área",
+                    orientation="h",
+                    text="Eventos",
+                    color="Eventos",
+                    color_continuous_scale=["#B3C5E7", "#1A2B6D"],
+                )
+                fig_p.update_traces(textposition="outside")
+                fig_p.update_layout(
+                    yaxis={"autorange": "reversed"},
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    showlegend=False
+                )
+                st.plotly_chart(fig_p, use_container_width=True)
+            else:
+                st.info("No hay datos registrados para este proceso.")
+        else:
+            st.warning("No se encontró la columna de Proceso/Área.")
 
     with col_right:
         st.markdown("##### Descripción de Hallazgos Recurrentes")
         if col_desc:
-            df_d = df_v[col_desc[0]].value_counts().reset_index().head(8)
+            df_d_data = df_proc_view[df_proc_view[col_desc[0]].astype(str).str.strip() != ""].copy()
+            df_d_data = df_d_data[df_d_data[col_desc[0]].notna()]
+
+            df_d = df_d_data[col_desc[0]].value_counts().reset_index().head(8)
             df_d.columns = ["Descripción", "Frecuencia"]
-            fig_d = px.bar(
-                df_d,
-                x="Frecuencia",
-                y="Descripción",
-                orientation="h",
-                color="Frecuencia",
-                color_continuous_scale=["#FFE4C4", "#F58220"],
-            )
-            fig_d.update_layout(
-                yaxis={"categoryorder": "total ascending"},
-                margin=dict(l=0, r=20, t=20, b=20),
-            )
-            st.plotly_chart(fig_d, use_container_width=True)
+            
+            if not df_d.empty:
+                fig_d = px.bar(
+                    df_d,
+                    x="Frecuencia",
+                    y="Descripción",
+                    orientation="h",
+                    text="Frecuencia",
+                    color="Frecuencia",
+                    color_continuous_scale=["#FFE4C4", "#F58220"],
+                )
+                fig_d.update_traces(textposition="outside")
+                fig_d.update_layout(
+                    yaxis={"autorange": "reversed"},
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    showlegend=False
+                )
+                st.plotly_chart(fig_d, use_container_width=True)
+            else:
+                st.info("No hay descripciones de hallazgos para la selección actual.")
+        else:
+            st.warning("No se encontró la columna de Descripción de SNC.")
 
     st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
     if col_momento:
         st.markdown("##### Detección del Evento por Etapa del Servicio")
         fig_m = px.histogram(
-            df_v,
+            df_proc_view,
             x="Servicio",
             color=col_momento[0],
             barmode="group",
@@ -438,19 +484,39 @@ with t_personas:
 
     with p_col2:
         st.markdown("##### Distribución por Servicio")
-        fig_s = px.pie(
-            df_v,
-            names="Servicio",
-            hole=0.4,
-            color_discrete_sequence=[
-                "#1A2B6D",
-                "#F58220",
-                "#2A3F90",
-                "#E2E8F0",
-            ],
+        
+        # Filtro propio local para la pestaña de Personal
+        opciones_servicio_personal = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
+        servicio_personal_sel = st.selectbox(
+            "Filtrar gráfico por servicio:",
+            options=opciones_servicio_personal,
+            key="sb_gestion_personal"
         )
-        fig_s.update_layout(margin=dict(l=0, r=0, t=20, b=20))
-        st.plotly_chart(fig_s, use_container_width=True)
+        
+        df_personal_view = (
+            df_v[df_v["Servicio"] == servicio_personal_sel]
+            if servicio_personal_sel != "Todos los servicios"
+            else df_v.copy()
+        )
+
+        if not df_personal_view.empty:
+            fig_s = px.pie(
+                df_personal_view,
+                names="Servicio",
+                hole=0.4,
+                color_discrete_sequence=[
+                    "#1A2B6D",
+                    "#F58220",
+                    "#2A3F90",
+                    "#E2E8F0",
+                    "#38A169",
+                    "#DD6B20"
+                ],
+            )
+            fig_s.update_layout(margin=dict(l=0, r=0, t=20, b=20))
+            st.plotly_chart(fig_s, use_container_width=True)
+        else:
+            st.info("No hay registros para mostrar en la selección.")
 
 with t_tabla:
     st.markdown(f"##### Registros ({segmento})")
@@ -495,35 +561,13 @@ with st.popover("💬 Asistente IA SNC"):
                 with st.chat_message("user"):
                     st.markdown(user_prompt)
 
-                # Palabras comunes a ignorar en la búsqueda de texto
                 palabras_ignorar = {
-                    "que",
-                    "del",
-                    "los",
-                    "las",
-                    "por",
-                    "con",
-                    "para",
-                    "documento",
-                    "cedula",
-                    "nit",
-                    "numero",
-                    "snc",
-                    "colmedicos",
-                    "hola",
-                    "como",
-                    "deberia",
-                    "tratar",
-                    "esta",
-                    "plan",
-                    "accion",
-                    "recomiendas",
-                    "genero",
-                    "generó",
-                    "este",
+                    "que", "del", "los", "las", "por", "con", "para", "documento",
+                    "cedula", "nit", "numero", "snc", "colmedicos", "hola", "como",
+                    "deberia", "tratar", "esta", "plan", "accion", "recomiendas",
+                    "genero", "generó", "este"
                 }
 
-                # Extrae términos alfanuméricos (letras + números como PT6085230, o solo números/letras)
                 tokens = re.findall(r"\b[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+\b", user_prompt)
                 terminos_busqueda = [
                     t.lower()
@@ -534,7 +578,6 @@ with st.popover("💬 Asistente IA SNC"):
                 coincidencias = pd.DataFrame()
 
                 if terminos_busqueda:
-                    # Búsqueda coincidente en el texto consolidado
                     pattern = "|".join(terminos_busqueda)
                     coincidencias = df_f[
                         df_f["_search_text"].str.contains(
