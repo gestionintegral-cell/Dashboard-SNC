@@ -15,30 +15,46 @@ st.set_page_config(
 st.title("📊 Dashboard de Gestión de Calidad (SNC) - COLMEDICOS")
 
 # ---------------------------------------------------------
-# 2. CARGA DE DATOS DESDE GOOGLE SHEETS O EXCEL
+# 2. CARGA Y CONSOLIDACIÓN DE PESTAÑAS (EXCEL / GOOGLE SHEETS)
 # ---------------------------------------------------------
 @st.cache_data(ttl=600)
 def cargar_datos():
     sheet_id = "1N9So7ddadDxy2TPhpZZUsnqlLUn6my-FvByFg3dOYf0"
     
-    # OPCIÓN A: Si descargas directamente desde el gid de la pestaña
-    # Reemplaza 'gid=935748465' por el gid real de la pestaña de los datos (aparece al final de la URL en el navegador)
-    url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=935748465"
-    
-    # OPCIÓN B: Especificar la pestaña por su NOMBRE exacto si el gid falla:
-    # nombre_pestana = "Hoja 1"  # <--- Cambia esto por el nombre de la pestaña de datos
-    # url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={nombre_pestana}"
-
+    # Intentamos leer Excel local primero si existe
     try:
-        df = pd.read_csv(url_csv)
+        excel_path = "F-CAL-08 Control de salidas no conformes - SNC.xlsx"
+        xls = pd.ExcelFile(excel_path)
+        sheet_names = xls.sheet_names
     except Exception:
-        # En Excel local, leemos la segunda pestaña o la nombramos directamente
-        excel_file = pd.ExcelFile("F-CAL-08 Control de salidas no conformes - SNC.xlsx")
-        # Selecciona la segunda pestaña disponible si la primera es el glosario
-        sheet_name_to_use = excel_file.sheet_names[1] if len(excel_file.sheet_names) > 1 else 0
-        df = pd.read_excel(excel_file, sheet_name=sheet_name_to_use)
+        # Si no existe local, intentamos descargar el Excel directamente de Google Sheets
+        url_excel = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx"
+        xls = pd.ExcelFile(url_excel)
+        sheet_names = xls.sheet_names
+
+    dfs = []
+    # Recorremos cada pestaña del archivo
+    for sheet in sheet_names:
+        # Ignoramos la pestaña del glosario / matriz de listas
+        if "matriz" in sheet.lower():
+            continue
+            
+        df_sheet = pd.read_excel(xls, sheet_name=sheet)
         
-    return df
+        # Limpiamos nombres de columnas
+        df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
+        
+        # Si la pestaña contiene datos reales
+        if not df_sheet.empty and len(df_sheet.columns) > 1:
+            df_sheet["Servicio"] = sheet  # Asignamos el nombre del servicio según la pestaña
+            dfs.append(df_sheet)
+            
+    if not dfs:
+        raise ValueError("No se encontraron pestañas de datos válidas.")
+
+    # Combinar todas las pestañas de servicios en un solo DataFrame
+    df_combined = pd.concat(dfs, ignore_index=True)
+    return df_combined
 
 try:
     df_raw = cargar_datos()
@@ -49,11 +65,8 @@ except Exception as e:
 # Copia de trabajo
 df = df_raw.copy()
 
-# Normalizamos los nombres de las columnas quitando espacios iniciales/finales
-df.columns = [str(c).strip() for c in df.columns]
-
 # ---------------------------------------------------------
-# 3. BÚSQUEDA FLEXIBLE DE LA COLUMNA ESTADO
+# 3. BÚSQUEDA Y NORMALIZACIÓN DE COLUMNA ESTADO Y CLASIFICACIÓN
 # ---------------------------------------------------------
 col_estado = None
 for col in df.columns:
@@ -69,16 +82,18 @@ if not col_estado:
 
 if col_estado:
     df.rename(columns={col_estado: 'Estado'}, inplace=True)
-    df['Estado'] = df['Estado'].fillna('').astype(str).str.strip().str.upper()
+    # Rellenar vacíos con 'ABIERTA' si no tienen estado especificado
+    df['Estado'] = df['Estado'].fillna('ABIERTA').astype(str).str.strip().str.upper()
+    df.loc[df['Estado'] == '', 'Estado'] = 'ABIERTA'
 else:
-    st.error("⚠️ No se encontró la columna 'Estado'. A continuación ves los nombres de columnas leídos en tu pestaña actual:")
+    st.error("⚠️ No se encontró la columna 'Estado'. A continuación ves los nombres de columnas leídos:")
     st.write(list(df.columns))
     st.stop()
 
-# Búsqueda flexible de Clasificación
+# Búsqueda flexible de Clasificación / Incidente
 col_clasif = None
 for col in df.columns:
-    if "clasificac" in col.lower():
+    if "incidente" in col.lower() or "clasificac" in col.lower() or "coyuntural" in col.lower():
         col_clasif = col
         break
 
@@ -89,13 +104,21 @@ if col_clasif:
 # Crear columna combinada para búsqueda rápida en el Chatbot
 df['_search_text'] = df.apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
 
-# Identificar columna de colaborador/usuario si existe
+# Identificar columna de colaborador
 col_colaborador = [c for c in df.columns if 'colaborador' in c.lower() or 'usuario' in c.lower()]
 
 # ---------------------------------------------------------
 # 4. FILTROS LATERALES (SIDEBAR)
 # ---------------------------------------------------------
 st.sidebar.header("🔍 Filtros de Datos")
+
+# Filtro por Servicio (Pestañas)
+servicios_disponibles = list(df['Servicio'].unique())
+servicio_seleccionado = st.sidebar.multiselect(
+    "Filtrar por Servicio / Área:",
+    options=servicios_disponibles,
+    default=servicios_disponibles
+)
 
 # Filtro por Estado
 estados_disponibles = list(df['Estado'].unique())
@@ -105,27 +128,26 @@ estado_seleccionado = st.sidebar.multiselect(
     default=estados_disponibles
 )
 
-# Aplicar filtro
-if estado_seleccionado:
-    df_f = df[df['Estado'].isin(estado_seleccionado)].copy()
-else:
-    df_f = df.copy()
+# Aplicar filtros
+df_f = df[
+    (df['Servicio'].isin(servicio_seleccionado)) &
+    (df['Estado'].isin(estado_seleccionado))
+].copy()
 
 # ---------------------------------------------------------
 # 5. CÁLCULO DE MÉTRICAS GENERALES
 # ---------------------------------------------------------
 total_registros = len(df_f)
 
-# Conteos exactos verificando ABIERTA y CERRADA
 cerrados = (df_f['Estado'] == 'CERRADA').sum()
 pendientes = (df_f['Estado'] == 'ABIERTA').sum()
 
-# Si hay estados distintos a ABIERTA/CERRADA, los suma a pendientes
+# Otros estados no especificados
 otros_estados = total_registros - (cerrados + pendientes)
 if otros_estados > 0:
     pendientes += otros_estados
 
-# Cálculo de Tasa de Cierre
+# Tasa de Cierre
 tasa_cierre = (cerrados / total_registros * 100) if total_registros > 0 else 0.0
 
 # Conteo de Clasificaciones (Incidentes / Coyunturales)
@@ -133,7 +155,7 @@ incidentes = 0
 coyunturales = 0
 
 if 'Clasificacion' in df_f.columns:
-    incidentes = df_f['Clasificacion'].str.contains('INCIDENTE', na=False).sum()
+    incidentes = df_f['Clasificacion'].str.contains('SI|INCIDENTE', na=False).sum()
     coyunturales = df_f['Clasificacion'].str.contains('COYUNTURAL', na=False).sum()
 
 # ---------------------------------------------------------
@@ -153,7 +175,7 @@ with col4:
 st.markdown("---")
 
 # ---------------------------------------------------------
-# 7. CHATBOT FLOTANTE OPTIMIZADO
+# 7. CHATBOT FLOTANTE OPTIMIZADO CON IA (STREAMING)
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
@@ -232,7 +254,7 @@ with st.popover("💬 Asistente IA SNC"):
                     cols_limpias = [
                         c
                         for c in df_f.columns
-                        if c not in ["Fecha_DT", "Periodo", "_search_text"]
+                        if c not in ["_search_text"]
                     ]
                     registros_encontrados = coincidencias[cols_limpias].head(
                         3
@@ -252,7 +274,7 @@ with st.popover("💬 Asistente IA SNC"):
                 DATOS DE LA SESIÓN:
                 - Total Registros: {total_registros} | Tasa Cierre: {tasa_cierre:.1f}%
                 - Pendientes (Abiertas): {pendientes} | Cerradas: {cerrados}
-                - Coyunturales: {coyunturales} | Incidentes: {incidentes}
+                - Incidentes/Coyunturales: {incidentes}
                 {resumen_colaboradores}
                 {resumen_servicios}
                 {contexto_especifico}
