@@ -602,7 +602,7 @@ with t_tabla:
     st.dataframe(df_export, use_container_width=True)
 
 # ---------------------------------------------------------
-# 12. CHATBOT FLOTANTE OPTIMIZADO Y CORREGIDO
+# 12. CHATBOT FLOTANTE
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
@@ -706,19 +706,11 @@ with st.popover("💬 Asistente IA SNC"):
                 """
 
                 try:
-                    # Detección dinámica del nombre del modelo disponible en tu cuenta
-                    nombre_modelo = "gemini-1.5-flash"
-                    try:
-                        for m in genai.list_models():
-                            if "generateContent" in m.supported_generation_methods:
-                                if "flash" in m.name:
-                                    nombre_modelo = m.name
-                                    break
-                    except Exception:
-                        pass
-
-                    model = genai.GenerativeModel(nombre_modelo)
-                    prompt_completo = f"{contexto_snc}\n\nPregunta: {user_prompt}"
+                    # Modelo estándar activo y de respuesta ultrarrápida
+                    model = genai.GenerativeModel("gemini-2.0-flash")
+                    prompt_completo = (
+                        f"{contexto_snc}\n\nPregunta: {user_prompt}"
+                    )
 
                     with st.chat_message("assistant"):
                         response_stream = model.generate_content(
