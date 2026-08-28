@@ -291,7 +291,7 @@ with t_procesos:
             x="Servicio",
             color=col_momento[0],
             barmode="group",
-            color_discrete_sequence=px.colors.qualitative.Slate,
+            color_discrete_sequence=px.colors.qualitative.Set2,
         )
         fig_m.update_layout(margin=dict(l=0, r=0, t=20, b=20))
         st.plotly_chart(fig_m, use_container_width=True)
