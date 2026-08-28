@@ -46,7 +46,7 @@ def es_estado_cerrado(val):
     """
     if pd.isna(val):
         return False
-    
+
     val_str = (
         str(val)
         .strip()
@@ -57,8 +57,7 @@ def es_estado_cerrado(val):
         .replace("Ó", "O")
         .replace("Ú", "U")
     )
-    
-    # Evalúa si la celda es CERRADA / CERRADO o contiene la raíz CERRAD
+
     return val_str in ["CERRADA", "CERRADO", "SI", "TRUE", "1"] or "CERRAD" in val_str
 
 
@@ -218,7 +217,8 @@ col_momento = [c for c in df.columns if "momento de identificación" in c.lower(
 col_desc = [c for c in df.columns if "descripción de la salida no conforme" in c.lower()]
 if not col_desc:
     col_desc = [
-        c for c in df.columns 
+        c
+        for c in df.columns
         if any(p in c.lower() for p in ["descripci", "hallazgo", "detalle", "motivo"])
         and "tratamiento" not in c.lower()
         and "calidad" not in c.lower()
@@ -388,7 +388,7 @@ with t_procesos:
         options=servicios_proceso_opt,
         key="sb_analisis_proceso"
     )
-    
+
     df_proc_view = (
         df_v[df_v["Servicio"] == servicio_focal]
         if servicio_focal != "Todos los servicios"
@@ -401,7 +401,7 @@ with t_procesos:
         if col_proceso:
             df_p_data = df_proc_view[df_proc_view[col_proceso[0]].astype(str).str.strip() != ""].copy()
             df_p_data = df_p_data[df_p_data[col_proceso[0]].notna() & (df_p_data[col_proceso[0]] != "nan")]
-            
+
             df_p = (
                 df_p_data[col_proceso[0]]
                 .value_counts()
@@ -409,7 +409,7 @@ with t_procesos:
                 .head(10)
             )
             df_p.columns = ["Proceso / Área", "Eventos"]
-            
+
             if not df_p.empty:
                 fig_p = px.bar(
                     df_p,
@@ -440,7 +440,7 @@ with t_procesos:
 
             df_d = df_d_data[col_desc[0]].value_counts().reset_index().head(8)
             df_d.columns = ["Descripción", "Frecuencia"]
-            
+
             if not df_d.empty:
                 fig_d = px.bar(
                     df_d,
@@ -494,51 +494,100 @@ with t_tiempo:
     else:
         st.info("No hay suficientes datos temporales cargados.")
 
+# ---------------------------------------------------------
+# PESTAÑA: GESTIÓN POR PERSONAL (AJUSTADA Y CORREGIDA)
+# ---------------------------------------------------------
 with t_personas:
+    opciones_servicio_personal = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
+    servicio_personal_sel = st.selectbox(
+        "Filtrar por servicio:",
+        options=opciones_servicio_personal,
+        key="sb_gestion_personal"
+    )
+
+    # Filtrar el DataFrame según el servicio elegido para AMBAS columnas
+    df_personal_view = (
+        df_v[df_v["Servicio"] == servicio_personal_sel]
+        if servicio_personal_sel != "Todos los servicios"
+        else df_v.copy()
+    )
+
     p_col1, p_col2 = st.columns(2)
+
+    # Columna 1: Tabla de Colaboradores del servicio seleccionado
     with p_col1:
         st.markdown("##### Eventos por Colaborador")
         if col_colaborador:
+            df_c_data = df_personal_view[
+                df_personal_view[col_colaborador[0]].notna()
+                & (df_personal_view[col_colaborador[0]].astype(str).str.strip() != "")
+                & (df_personal_view[col_colaborador[0]].astype(str).str.lower() != "nan")
+            ]
             df_c = (
-                df_v[col_colaborador[0]].value_counts().reset_index().head(10)
+                df_c_data[col_colaborador[0]]
+                .value_counts()
+                .reset_index()
             )
             df_c.columns = ["Colaborador", "Registros"]
-            st.dataframe(df_c, use_container_width=True)
 
-    with p_col2:
-        st.markdown("##### Distribución por Servicio")
-        
-        opciones_servicio_personal = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
-        servicio_personal_sel = st.selectbox(
-            "Filtrar gráfico por servicio:",
-            options=opciones_servicio_personal,
-            key="sb_gestion_personal"
-        )
-        
-        df_personal_view = (
-            df_v[df_v["Servicio"] == servicio_personal_sel]
-            if servicio_personal_sel != "Todos los servicios"
-            else df_v.copy()
-        )
-
-        if not df_personal_view.empty:
-            fig_s = px.pie(
-                df_personal_view,
-                names="Servicio",
-                hole=0.4,
-                color_discrete_sequence=[
-                    "#1A2B6D",
-                    "#F58220",
-                    "#2A3F90",
-                    "#E2E8F0",
-                    "#38A169",
-                    "#DD6B20"
-                ],
-            )
-            fig_s.update_layout(margin=dict(l=0, r=0, t=20, b=20))
-            st.plotly_chart(fig_s, use_container_width=True)
+            if not df_c.empty:
+                st.dataframe(df_c, use_container_width=True, hide_index=True)
+            else:
+                st.info("No hay colaboradores registrados para la selección.")
         else:
-            st.info("No hay registros para mostrar en la selección.")
+            st.warning("No se encontró la columna de Colaboradores.")
+
+    # Columna 2: Gráfica según el filtro (Por Colaborador o Por Servicio)
+    with p_col2:
+        if servicio_personal_sel != "Todos los servicios":
+            st.markdown(f"##### Distribución por Colaborador ({servicio_personal_sel})")
+            if col_colaborador and not df_personal_view.empty:
+                df_pie_colab = (
+                    df_personal_view[col_colaborador[0]]
+                    .value_counts()
+                    .reset_index()
+                )
+                df_pie_colab.columns = ["Colaborador", "Registros"]
+
+                fig_s = px.pie(
+                    df_pie_colab,
+                    names="Colaborador",
+                    values="Registros",
+                    hole=0.4,
+                    color_discrete_sequence=px.colors.qualitative.Set3,
+                )
+                fig_s.update_layout(margin=dict(l=0, r=0, t=20, b=20))
+                st.plotly_chart(fig_s, use_container_width=True)
+            else:
+                st.info("No hay registros para mostrar.")
+        else:
+            st.markdown("##### Distribución por Servicio")
+            if not df_personal_view.empty:
+                df_pie_serv = (
+                    df_personal_view["Servicio"]
+                    .value_counts()
+                    .reset_index()
+                )
+                df_pie_serv.columns = ["Servicio", "Registros"]
+
+                fig_s = px.pie(
+                    df_pie_serv,
+                    names="Servicio",
+                    values="Registros",
+                    hole=0.4,
+                    color_discrete_sequence=[
+                        "#1A2B6D",
+                        "#F58220",
+                        "#2A3F90",
+                        "#E2E8F0",
+                        "#38A169",
+                        "#DD6B20"
+                    ],
+                )
+                fig_s.update_layout(margin=dict(l=0, r=0, t=20, b=20))
+                st.plotly_chart(fig_s, use_container_width=True)
+            else:
+                st.info("No hay registros para mostrar.")
 
 with t_tabla:
     st.markdown(f"##### Registros ({segmento})")
@@ -664,10 +713,10 @@ with st.popover("💬 Asistente IA SNC"):
 
                     with st.chat_message("assistant"):
                         response_stream = model.generate_content(
-                            prompt_completo, 
+                            prompt_completo,
                             stream=True
                         )
-                        
+
                         def stream_generator():
                             for chunk in response_stream:
                                 yield chunk.text
