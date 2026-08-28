@@ -532,7 +532,7 @@ with t_tabla:
     st.dataframe(df_export, use_container_width=True)
 
 # ---------------------------------------------------------
-# 12. CHATBOT FLOTANTE OPTIMIZADO CON STREAMING
+# 12. CHATBOT FLOTANTE OPTIMIZADO Y CORREGIDO
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
@@ -587,7 +587,6 @@ with st.popover("💬 Asistente IA SNC"):
                         )
                     ]
 
-                # Resumen conciso de Top Colaboradores (Máx 3 para mayor velocidad)
                 resumen_colaboradores = ""
                 if col_colaborador:
                     top_colab = (
@@ -600,7 +599,6 @@ with st.popover("💬 Asistente IA SNC"):
                     for colab, cant in top_colab.items():
                         resumen_colaboradores += f"- {colab}: {cant}\n"
 
-                # Resumen conciso de Top Servicios (Máx 3 para mayor velocidad)
                 resumen_servicios = ""
                 top_serv = df_f["Servicio"].value_counts().head(3).to_dict()
                 resumen_servicios = "\nTOP SERVICIOS CON MÁS CASOS:\n"
@@ -614,7 +612,6 @@ with st.popover("💬 Asistente IA SNC"):
                         for c in df_f.columns
                         if c not in ["Fecha_DT", "Periodo", "_search_text"]
                     ]
-                    # Solo enviamos hasta 3 coincidencias para evitar exceso de tokens
                     registros_encontrados = coincidencias[cols_limpias].head(
                         3
                     ).to_dict(orient="records")
@@ -639,14 +636,13 @@ with st.popover("💬 Asistente IA SNC"):
                 """
 
                 try:
-                    # Configuración optimizada del modelo
-                    model = genai.GenerativeModel("gemini-1.5-flash")
+                    # Uso de modelo estándar compatible y de respuesta ultra rápida
+                    model = genai.GenerativeModel("gemini-2.5-flash")
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta: {user_prompt}"
                     )
 
                     with st.chat_message("assistant"):
-                        # Usar Streaming para escritura instantánea en pantalla
                         response_stream = model.generate_content(
                             prompt_completo, 
                             stream=True
