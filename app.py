@@ -71,27 +71,35 @@ st.markdown(
         margin-top: 2px;
     }
 
-    /* Posicionamiento del Popover flotante en esquina inferior derecha */
+    /* Fijar contenedor del Popover flotante a la derecha abajo */
     div[data-testid="stPopover"] {
-        position: fixed;
-        bottom: 25px;
-        right: 25px;
-        z-index: 999999;
+        position: fixed !important;
+        bottom: 30px !important;
+        right: 30px !important;
+        width: auto !important;
+        z-index: 999999 !important;
     }
-    
+
+    /* Estilo del botón flotante */
     div[data-testid="stPopover"] > button {
+        width: auto !important;
+        min-width: 180px !important;
         background-color: #1A2B6D !important;
         color: white !important;
         border-radius: 30px !important;
         padding: 12px 24px !important;
         font-weight: bold !important;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.3) !important;
-        border: none !important;
+        box-shadow: 0px 4px 14px rgba(0,0,0,0.3) !important;
+        border: 2px solid #FFFFFF !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
-    
+
     div[data-testid="stPopover"] > button:hover {
         background-color: #F58220 !important;
         color: white !important;
+        border-color: #FFFFFF !important;
     }
     </style>
 """,
