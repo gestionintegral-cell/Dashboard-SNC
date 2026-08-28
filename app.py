@@ -532,7 +532,7 @@ with t_tabla:
     st.dataframe(df_export, use_container_width=True)
 
 # ---------------------------------------------------------
-# 12. CHATBOT FLOTANTE EN ESQUINA INFERIOR DERECHA
+# 12. CHATBOT FLOTANTE OPTIMIZADO CON STREAMING
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
@@ -587,25 +587,25 @@ with st.popover("💬 Asistente IA SNC"):
                         )
                     ]
 
-                # Resumen de Top Colaboradores para la IA
+                # Resumen conciso de Top Colaboradores (Máx 3 para mayor velocidad)
                 resumen_colaboradores = ""
                 if col_colaborador:
                     top_colab = (
                         df_f[col_colaborador[0]]
                         .value_counts()
-                        .head(5)
+                        .head(3)
                         .to_dict()
                     )
-                    resumen_colaboradores = "\nTOP 5 COLABORADORES CON MÁS REGISTROS / INCIDENCIAS:\n"
+                    resumen_colaboradores = "\nTOP COLABORADORES CON MÁS CASOS:\n"
                     for colab, cant in top_colab.items():
-                        resumen_colaboradores += f"- {colab}: {cant} caso(s)\n"
+                        resumen_colaboradores += f"- {colab}: {cant}\n"
 
-                # Resumen de Top Servicios
+                # Resumen conciso de Top Servicios (Máx 3 para mayor velocidad)
                 resumen_servicios = ""
-                top_serv = df_f["Servicio"].value_counts().head(5).to_dict()
-                resumen_servicios = "\nTOP SERVICIOS CON MÁS REGISTROS:\n"
+                top_serv = df_f["Servicio"].value_counts().head(3).to_dict()
+                resumen_servicios = "\nTOP SERVICIOS CON MÁS CASOS:\n"
                 for serv, cant in top_serv.items():
-                    resumen_servicios += f"- {serv}: {cant} caso(s)\n"
+                    resumen_servicios += f"- {serv}: {cant}\n"
 
                 contexto_especifico = ""
                 if not coincidencias.empty:
@@ -614,11 +614,12 @@ with st.popover("💬 Asistente IA SNC"):
                         for c in df_f.columns
                         if c not in ["Fecha_DT", "Periodo", "_search_text"]
                     ]
+                    # Solo enviamos hasta 3 coincidencias para evitar exceso de tokens
                     registros_encontrados = coincidencias[cols_limpias].head(
-                        5
+                        3
                     ).to_dict(orient="records")
 
-                    contexto_especifico = "\n\nREGISTROS ESPECÍFICOS ENCONTRADOS POR BÚSQUEDA:\n"
+                    contexto_especifico = "\n\nREGISTROS ENCONTRADOS:\n"
                     for idx, reg in enumerate(registros_encontrados, 1):
                         contexto_especifico += f"\n--- Caso #{idx} ---\n"
                         for k, v in reg.items():
@@ -626,36 +627,39 @@ with st.popover("💬 Asistente IA SNC"):
                                 contexto_especifico += f"- {k}: {v}\n"
 
                 contexto_snc = f"""
-                Eres el Asistente Experto en Gestión de Calidad y Salidas No Conformes (SNC) de COLMEDICOS.
+                Eres el Asistente de Gestión de Calidad (SNC) de COLMEDICOS.
+                Responde de forma concisa, directa y estructurada.
                 
-                REGLAS DE RESPUESTA:
-                - Responde de forma clara, directa y estructurada.
-                - Si te preguntan por colaboradores/usuarios o servicios con más incidencias, utiliza la información resumida proporcionada a continuación.
-                - Si se encuentra un registro específico, presenta detalladamente sus datos.
-                - Si te piden un TRATAMIENTO: indica la corrección inmediata recomendada y el manejo del evento.
-                - Si te piden PLAN DE ACCIÓN / MEJORA: sugiere metodología (5 Porqués / Causa Raíz) con Actividad, Responsable y Seguimiento.
-                
-                RESUMEN DE DATOS ACTUALES (FILTRADOS):
-                - Registros totales: {len(df_f)} | Efectividad cierre: {tasa_cierre:.1f}%
-                - Pendientes: {pendientes} | Cerrados: {cerrados} | Acciones coyunturales: {coyunturales} | Incidentes: {incidentes}
+                DATOS DE LA SESIÓN:
+                - Registros: {len(df_f)} | Tasa Cierre: {tasa_cierre:.1f}%
+                - Pendientes: {pendientes} | Cerrados: {cerrados} | Coyunturales: {coyunturales} | Incidentes: {incidentes}
                 {resumen_colaboradores}
                 {resumen_servicios}
                 {contexto_especifico}
                 """
 
                 try:
-                    model = genai.GenerativeModel("gemini-3.6-flash")
+                    # Configuración optimizada del modelo
+                    model = genai.GenerativeModel("gemini-1.5-flash")
                     prompt_completo = (
-                        f"{contexto_snc}\n\nPregunta del usuario: {user_prompt}"
+                        f"{contexto_snc}\n\nPregunta: {user_prompt}"
                     )
 
                     with st.chat_message("assistant"):
-                        with st.spinner("Analizando información de SNC..."):
-                            response = model.generate_content(prompt_completo)
-                            st.markdown(response.text)
+                        # Usar Streaming para escritura instantánea en pantalla
+                        response_stream = model.generate_content(
+                            prompt_completo, 
+                            stream=True
+                        )
+                        
+                        def stream_generator():
+                            for chunk in response_stream:
+                                yield chunk.text
+
+                        full_response = st.write_stream(stream_generator)
 
                     st.session_state.gemini_messages.append(
-                        {"role": "assistant", "content": response.text}
+                        {"role": "assistant", "content": full_response}
                     )
                 except Exception as err:
                     st.error(f"Error al procesar la respuesta con la IA: {err}")
