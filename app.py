@@ -24,13 +24,13 @@ def cargar_datos():
     # url = "https://docs.google.com/spreadsheets/d/TU_ID/export?format=csv"
     
     # NOTA: Cambia esta ruta o URL por la fuente de tus datos
-    url_o_ruta = "tu_archivo_snc.csv" 
+    url_o_ruta = "https://docs.google.com/spreadsheets/d/1N9So7ddadDxy2TPhpZZUsnqlLUn6my-FvByFg3dOYf0/edit?gid=935748465#gid=935748465" 
     
     try:
         df = pd.read_csv(url_o_ruta)
     except Exception:
         # Fallback a Excel si usas un archivo local .xlsx
-        df = pd.read_excel("tu_archivo_snc.xlsx")
+        df = pd.read_excel("F-CAL-08 Control de salidas no conformes - SNC")
         
     return df
 
