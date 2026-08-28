@@ -40,39 +40,30 @@ def get_base64_image(ruta_archivo):
     return ""
 
 
-def es_afirmativo_o_cerrado(val):
+def es_estado_cerrado(val):
     """
-    Normaliza y valida valores para determinar si un caso está CERRADO.
-    Considera variaciones de afirmativos (SI, YES, TRUE, 1) y términos de cierre (CERRADO, CERRADA, FINALIZADO).
+    Identifica si el estado del registro es CERRADA o CERRADO.
     """
     if pd.isna(val):
         return False
     
-    val_str = str(val).strip().upper()
-    
-    # Reemplazo de tildes
     val_str = (
-        val_str.replace("Í", "I")
+        str(val)
+        .strip()
+        .upper()
+        .replace("Í", "I")
         .replace("Á", "A")
         .replace("É", "E")
         .replace("Ó", "O")
         .replace("Ú", "U")
     )
     
-    # Lista explícita de coincidencia exacta
-    valores_validos = ["SI", "S", "TRUE", "1", "YES", "CERRADO", "CERRADA", "FINALIZADO", "OK", "RESUELTO"]
-    if val_str in valores_validos:
-        return True
-        
-    # Coincidencia por subcadena para casos con descripciones largas (ej. "CERRADO CON ACCIÓN")
-    if any(k in val_str for k in ["CERRAD", "FINALIZAD", "RESUELT"]):
-        return True
-
-    return False
+    # Evalúa si la celda es CERRADA / CERRADO o contiene la raíz CERRAD
+    return val_str in ["CERRADA", "CERRADO", "SI", "TRUE", "1"] or "CERRAD" in val_str
 
 
-def es_afirmativo_general(val):
-    """Validación estándar para banderas tipo 'Requiere acción coyuntural' o 'Incidente'."""
+def es_afirmativo(val):
+    """Normaliza y valida banderas auxiliares (Acción coyuntural, Incidente, etc.)."""
     if pd.isna(val):
         return False
     val_str = (
@@ -224,7 +215,6 @@ col_proceso = [c for c in df.columns if "proceso donde se identifica" in c.lower
 col_colaborador = [c for c in df.columns if "colaborador que genera" in c.lower()]
 col_momento = [c for c in df.columns if "momento de identificación" in c.lower()]
 
-# Mapeo exacto para Descripción de la salida no conforme
 col_desc = [c for c in df.columns if "descripción de la salida no conforme" in c.lower()]
 if not col_desc:
     col_desc = [
@@ -304,18 +294,18 @@ else:
 # ---------------------------------------------------------
 total_eventos = len(df_f)
 cerrados = (
-    len(df_f[df_f[col_estado[0]].apply(es_afirmativo_o_cerrado)])
+    len(df_f[df_f[col_estado[0]].apply(es_estado_cerrado)])
     if col_estado
     else 0
 )
 pendientes = total_eventos - cerrados
 coyunturales = (
-    len(df_f[df_f[col_coyuntural[0]].apply(es_afirmativo_general)])
+    len(df_f[df_f[col_coyuntural[0]].apply(es_afirmativo)])
     if col_coyuntural
     else 0
 )
 incidentes = (
-    len(df_f[df_f[col_incidente[0]].apply(es_afirmativo_general)])
+    len(df_f[df_f[col_incidente[0]].apply(es_afirmativo)])
     if col_incidente
     else 0
 )
@@ -334,7 +324,7 @@ with m2:
     )
 with m3:
     st.markdown(
-        f'<div class="metric-card"><div class="metric-title">Pendientes</div><div class="metric-value">{pendientes}</div></div>',
+        f'<div class="metric-card"><div class="metric-title">Pendientes (Abiertas)</div><div class="metric-value">{pendientes}</div></div>',
         unsafe_allow_html=True,
     )
 with m4:
@@ -357,7 +347,7 @@ segmento = st.radio(
     "Filtrar por estado operacional:",
     [
         "Todos los registros",
-        "Pendientes",
+        "Pendientes (Abiertas)",
         "Cerrados",
         "Con acción coyuntural",
         "Incidentes",
@@ -365,14 +355,14 @@ segmento = st.radio(
     horizontal=True,
 )
 
-if segmento == "Pendientes" and col_estado:
-    df_v = df_f[~df_f[col_estado[0]].apply(es_afirmativo_o_cerrado)]
+if "Pendientes" in segmento and col_estado:
+    df_v = df_f[~df_f[col_estado[0]].apply(es_estado_cerrado)]
 elif segmento == "Cerrados" and col_estado:
-    df_v = df_f[df_f[col_estado[0]].apply(es_afirmativo_o_cerrado)]
+    df_v = df_f[df_f[col_estado[0]].apply(es_estado_cerrado)]
 elif segmento == "Con acción coyuntural" and col_coyuntural:
-    df_v = df_f[df_f[col_coyuntural[0]].apply(es_afirmativo_general)]
+    df_v = df_f[df_f[col_coyuntural[0]].apply(es_afirmativo)]
 elif segmento == "Incidentes" and col_incidente:
-    df_v = df_f[df_f[col_incidente[0]].apply(es_afirmativo_general)]
+    df_v = df_f[df_f[col_incidente[0]].apply(es_afirmativo)]
 else:
     df_v = df_f.copy()
 
@@ -660,14 +650,13 @@ with st.popover("💬 Asistente IA SNC"):
                 
                 DATOS DE LA SESIÓN:
                 - Registros: {len(df_f)} | Tasa Cierre: {tasa_cierre:.1f}%
-                - Pendientes: {pendientes} | Cerrados: {cerrados} | Coyunturales: {coyunturales} | Incidentes: {incidentes}
+                - Pendientes (Abiertas): {pendientes} | Cerrados: {cerrados} | Coyunturales: {coyunturales} | Incidentes: {incidentes}
                 {resumen_colaboradores}
                 {resumen_servicios}
                 {contexto_especifico}
                 """
 
                 try:
-                    # Modelo actualizado gemini-1.5-flash
                     model = genai.GenerativeModel("gemini-1.5-flash")
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta: {user_prompt}"
