@@ -365,7 +365,7 @@ with t_procesos:
                 yaxis={"categoryorder": "total ascending"},
                 margin=dict(l=0, r=20, t=20, b=20),
             )
-            st.plotly_chart(fig_p, width=None)
+            st.plotly_chart(fig_p, use_container_width=True)
 
     with col_right:
         st.markdown("##### Descripción de Hallazgos Recurrentes")
@@ -384,7 +384,7 @@ with t_procesos:
                 yaxis={"categoryorder": "total ascending"},
                 margin=dict(l=0, r=20, t=20, b=20),
             )
-            st.plotly_chart(fig_d, width=None)
+            st.plotly_chart(fig_d, use_container_width=True)
 
     st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
     if col_momento:
@@ -397,7 +397,7 @@ with t_procesos:
             color_discrete_sequence=px.colors.qualitative.Set2,
         )
         fig_m.update_layout(margin=dict(l=0, r=0, t=20, b=20))
-        st.plotly_chart(fig_m, width=None)
+        st.plotly_chart(fig_m, use_container_width=True)
 
 with t_tiempo:
     st.markdown("##### Comportamiento Mensual de Registros")
@@ -413,7 +413,7 @@ with t_tiempo:
         )
         fig_t.update_traces(line_color="#1A2B6D", line_width=3)
         fig_t.update_layout(margin=dict(l=0, r=0, t=20, b=20))
-        st.plotly_chart(fig_t, width=None)
+        st.plotly_chart(fig_t, use_container_width=True)
     else:
         st.info("No hay suficientes datos temporales cargados.")
 
@@ -426,7 +426,7 @@ with t_personas:
                 df_v[col_colaborador[0]].value_counts().reset_index().head(10)
             )
             df_c.columns = ["Colaborador", "Registros"]
-            st.dataframe(df_c, width=None)
+            st.dataframe(df_c, use_container_width=True)
 
     with p_col2:
         st.markdown("##### Distribución por Servicio")
@@ -442,7 +442,7 @@ with t_personas:
             ],
         )
         fig_s.update_layout(margin=dict(l=0, r=0, t=20, b=20))
-        st.plotly_chart(fig_s, width=None)
+        st.plotly_chart(fig_s, use_container_width=True)
 
 with t_tabla:
     st.markdown(f"##### Registros ({segmento})")
@@ -454,7 +454,7 @@ with t_tabla:
         file_name="snc_colmedicos.csv",
         mime="text/csv",
     )
-    st.dataframe(df_export, width=None)
+    st.dataframe(df_export, use_container_width=True)
 
 # ---------------------------------------------------------
 # 12. CHATBOT FLOTANTE EN ESQUINA INFERIOR DERECHA
