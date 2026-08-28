@@ -19,18 +19,14 @@ st.title("📊 Dashboard de Gestión de Calidad (SNC) - COLMEDICOS")
 # ---------------------------------------------------------
 @st.cache_data(ttl=600)
 def cargar_datos():
-    # Sustituye con tu URL pública de Google Sheets en formato CSV o tu ruta local
-    # Ejemplo de URL pública de Google Sheets:
-    # url = "https://docs.google.com/spreadsheets/d/TU_ID/export?format=csv"
-    
-    # NOTA: Cambia esta ruta o URL por la fuente de tus datos
-    url_o_ruta = "https://docs.google.com/spreadsheets/d/1N9So7ddadDxy2TPhpZZUsnqlLUn6my-FvByFg3dOYf0/edit?gid=935748465#gid=935748465" 
+    # URL corregida convertida a formato exportable CSV
+    url_csv = "https://docs.google.com/spreadsheets/d/1N9So7ddadDxy2TPhpZZUsnqlLUn6my-FvByFg3dOYf0/export?format=csv&gid=935748465"
     
     try:
-        df = pd.read_csv(url_o_ruta)
+        df = pd.read_csv(url_csv)
     except Exception:
-        # Fallback a Excel si usas un archivo local .xlsx
-        df = pd.read_excel("F-CAL-08 Control de salidas no conformes - SNC")
+        # Fallback si se usa un archivo local en Excel
+        df = pd.read_excel("F-CAL-08 Control de salidas no conformes - SNC.xlsx")
         
     return df
 
@@ -47,14 +43,14 @@ df = df_raw.copy()
 # 3. LIMPIEZA Y NORMALIZACIÓN DE DATOS (CORRECCIÓN ESTADO)
 # ---------------------------------------------------------
 # Normalizamos los nombres de las columnas quitando espacios iniciales/finales
-df.columns = [c.strip() for c in df.columns]
+df.columns = [str(c).strip() for c in df.columns]
 
 # --- CORRECCIÓN CLAVE DE NOMBRES Y ESPACIOS EN ESTADO ---
 if 'Estado' in df.columns:
     # Convertimos a texto, quitamos espacios invisibles antes/después y pasamos a mayúsculas
     df['Estado'] = df['Estado'].fillna('').astype(str).str.strip().str.upper()
 else:
-    st.error("La columna 'Estado' no fue encontrada en el archivo.")
+    st.error("La columna 'Estado' no fue encontrada en el archivo. Verifica los encabezados.")
     st.stop()
 
 # Limpieza general de columnas de clasificación si existen
@@ -95,7 +91,7 @@ total_registros = len(df_f)
 cerrados = (df_f['Estado'] == 'CERRADA').sum()
 pendientes = (df_f['Estado'] == 'ABIERTA').sum()
 
-# Si por alguna razón hay estados distintos a ABIERTA/CERRADA, se contabilizan en pendientes
+# Si por alguna razón hay estados distintos a ABIERTA/CERRADA, se contabilizan como pendientes
 otros_estados = total_registros - (cerrados + pendientes)
 if otros_estados > 0:
     pendientes += otros_estados
@@ -128,7 +124,7 @@ with col4:
 st.markdown("---")
 
 # ---------------------------------------------------------
-# 7. CHATBOT FLOTANTE OPTIMIZADO (GEMINI-3.6-FLASH CON STREAMING)
+# 7. CHATBOT FLOTANTE OPTIMIZADO (STREAMING + RAPIDEZ)
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
@@ -234,7 +230,7 @@ with st.popover("💬 Asistente IA SNC"):
                 """
 
                 try:
-                    # Modelo oficial gemini-3.6-flash optimizado con streaming
+                    # Se usa gemini-3.6-flash optimizado con respuesta por streaming
                     model = genai.GenerativeModel("gemini-3.6-flash")
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta: {user_prompt}"
