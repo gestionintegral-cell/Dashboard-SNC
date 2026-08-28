@@ -426,6 +426,8 @@ with t_tabla:
 # ---------------------------------------------------------
 # 12. CHATBOT CON IA GRATUITO (Google Gemini)
 # ---------------------------------------------------------
+import re
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🤖 Asistente Virtual SNC")
 
@@ -456,26 +458,114 @@ if gemini_key:
                 with st.chat_message("user"):
                     st.markdown(user_prompt)
 
+                # ----------------------------------------------------
+                # BUSCADOR DINÁMICO EN EL DATAFRAME COMPLETO
+                # ----------------------------------------------------
+                numeros_buscados = re.findall(r"\b\d+\b", user_prompt)
+                palabras_buscadas = [
+                    p
+                    for p in re.findall(
+                        r"\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]{3,}\b", user_prompt
+                    )
+                    if p.lower()
+                    not in [
+                        "que",
+                        "del",
+                        "los",
+                        "las",
+                        "por",
+                        "con",
+                        "para",
+                        "documento",
+                        "cedula",
+                        "nit",
+                        "numero",
+                        "snc",
+                        "colmedicos",
+                        "hola",
+                        "como",
+                        "deberia",
+                        "tratar",
+                        "esta",
+                        "plan",
+                        "accion",
+                        "recomiendas",
+                    ]
+                ]
+
+                coincidencias = pd.DataFrame()
+
+                # 1. Búsqueda por número de identificación o NIT
+                if numeros_buscados:
+                    mask_num = pd.Series(False, index=df_f.index)
+                    for num in numeros_buscados:
+                        for col in df_f.columns:
+                            mask_num = mask_num | df_f[col].astype(
+                                str
+                            ).str.contains(num, na=False)
+                    coincidencias = df_f[mask_num]
+
+                # 2. Búsqueda por palabras clave si no dio resultado por número
+                if coincidencias.empty and palabras_buscadas:
+                    mask_pal = pd.Series(False, index=df_f.index)
+                    for pal in palabras_buscadas:
+                        for col in df_f.columns:
+                            mask_pal = mask_pal | df_f[col].astype(
+                                str
+                            ).str.lower().str.contains(
+                                pal.lower(), na=False, regex=False
+                            )
+                    coincidencias = df_f[mask_pal]
+
+                # Construcción del contexto detallado
+                contexto_especifico = ""
+                if not coincidencias.empty:
+                    cols_limpias = [
+                        c
+                        for c in df_f.columns
+                        if c not in ["Fecha_DT", "Periodo"]
+                    ]
+                    registros_encontrados = coincidencias[cols_limpias].head(
+                        10
+                    ).to_dict(orient="records")
+
+                    contexto_especifico = "\n\nREGISTROS ESPECÍFICOS ENCONTRADOS QUE COINCIDEN CON LA CONSULTA:\n"
+                    for idx, reg in enumerate(registros_encontrados, 1):
+                        contexto_especifico += f"\n--- Registro #{idx} ---\n"
+                        for k, v in reg.items():
+                            if pd.notna(v) and str(v).strip() != "":
+                                contexto_especifico += f"- {k}: {v}\n"
+
                 contexto_snc = f"""
-                Eres el asistente oficial de Gestión de Calidad de COLMEDICOS.
-                Responde únicamente con base en la información consolidada del sistema de Salidas No Conformes (SNC) provista a continuación:
+                Eres el Asistente Experto en Gestión de Calidad y Salidas No Conformes (SNC) de COLMEDICOS.
                 
-                METRICAS GENERALES ACTUALES (FILTRADAS):
+                TU MISION:
+                1. Responder preguntas sobre datos registrados en la base de SNC.
+                2. Brindar orientación metodológica de calidad cuando el usuario consulte sobre tratamiento o planes de acción.
+                
+                DIRECTRICES DE ASESORÍA DE CALIDAD:
+                - Si el usuario pregunta "¿Cómo debería tratar esta SNC?" o pide un tratamiento:
+                  * Define la acción inmediata o de corrección recomendada (ej: anular comprobante, reexpedir resultado, recontactar usuario).
+                  * Define la disposición o cierre del evento actual.
+                - Si el usuario pregunta por un "Plan de acción" o "Acción coyuntural/correctiva":
+                  * Recomienda un enfoque metodológico (Análisis de Causa Raíz / 5 Porqués).
+                  * Estructura la recomendación en 3 partes: Actividad concreta, Responsable sugerido y Mecanismo de seguimiento/verificación.
+                
+                DATOS CONSOLIDADOS DEL SISTEMA (FILTRADOS ACTUALMENTE):
                 - Total de eventos registrados: {len(df_f)}
                 - Efectividad de cierre: {tasa_cierre:.1f}%
                 - Casos pendientes por cerrar: {pendientes}
                 - Casos cerrados adecuadamente: {cerrados}
-                - Acciones coyunturales implementadas: {coyunturales}
+                - Acciones coyunturales registradas: {coyunturales}
                 - Incidentes reportados: {incidentes}
-                
-                MUESTRA REPRESENTATIVA DE REGISTROS ACTUALES:
-                {df_f[['Servicio', col_proceso[0] if col_proceso else 'Servicio', col_desc[0] if col_desc else 'Servicio']].head(30).to_string()}
+                {contexto_especifico if contexto_especifico else f'''
+                MUESTRA DE REGISTROS RECIENTES:
+                {df_f[['Servicio', col_proceso[0] if col_proceso else 'Servicio', col_desc[0] if col_desc else 'Servicio']].head(15).to_string()}
+                '''}
                 """
 
                 try:
-                    # Usar la versión activa indicada directamente por la API
                     model = genai.GenerativeModel("gemini-3.6-flash")
-
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta del usuario: {user_prompt}"
                     )
