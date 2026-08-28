@@ -1,6 +1,8 @@
 import re
 import pandas as pd
 import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
 import google.generativeai as genai
 
 # ---------------------------------------------------------
@@ -21,38 +23,31 @@ st.title("📊 Dashboard de Gestión de Calidad (SNC) - COLMEDICOS")
 def cargar_datos():
     sheet_id = "1N9So7ddadDxy2TPhpZZUsnqlLUn6my-FvByFg3dOYf0"
     
-    # Intentamos leer Excel local primero si existe
     try:
-        excel_path = "F-CAL-08 Control de salidas no conformes - SNC.xlsx"
+        excel_path = "F-CAL-08 Control de salidas no conformes - SNC (1).xlsx"
         xls = pd.ExcelFile(excel_path)
         sheet_names = xls.sheet_names
     except Exception:
-        # Si no existe local, intentamos descargar el Excel directamente de Google Sheets
         url_excel = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx"
         xls = pd.ExcelFile(url_excel)
         sheet_names = xls.sheet_names
 
     dfs = []
-    # Recorremos cada pestaña del archivo
     for sheet in sheet_names:
-        # Ignoramos la pestaña del glosario / matriz de listas
         if "matriz" in sheet.lower():
             continue
             
         df_sheet = pd.read_excel(xls, sheet_name=sheet)
-        
-        # Limpiamos nombres de columnas
         df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
         
-        # Si la pestaña contiene datos reales
         if not df_sheet.empty and len(df_sheet.columns) > 1:
-            df_sheet["Servicio"] = sheet  # Asignamos el nombre del servicio según la pestaña
+            clean_name = sheet.replace('_', ' ').strip()
+            df_sheet["Servicio"] = clean_name
             dfs.append(df_sheet)
             
     if not dfs:
         raise ValueError("No se encontraron pestañas de datos válidas.")
 
-    # Combinar todas las pestañas de servicios en un solo DataFrame
     df_combined = pd.concat(dfs, ignore_index=True)
     return df_combined
 
@@ -62,49 +57,30 @@ except Exception as e:
     st.error(f"Error al cargar la base de datos: {e}")
     st.stop()
 
-# Copia de trabajo
 df = df_raw.copy()
 
 # ---------------------------------------------------------
-# 3. BÚSQUEDA Y NORMALIZACIÓN DE COLUMNA ESTADO Y CLASIFICACIÓN
+# 3. NORMALIZACIÓN DE CAMPOS Y COLUMNAS
 # ---------------------------------------------------------
-col_estado = None
-for col in df.columns:
-    if col.lower().strip() == "estado":
-        col_estado = col
-        break
-
-if not col_estado:
-    for col in df.columns:
-        if "estado" in col.lower():
-            col_estado = col
-            break
-
+# Normalizar Estado
+col_estado = next((c for c in df.columns if "estado" in c.lower()), None)
 if col_estado:
     df.rename(columns={col_estado: 'Estado'}, inplace=True)
-    # Rellenar vacíos con 'ABIERTA' si no tienen estado especificado
-    df['Estado'] = df['Estado'].fillna('ABIERTA').astype(str).str.strip().str.upper()
-    df.loc[df['Estado'] == '', 'Estado'] = 'ABIERTA'
-else:
-    st.error("⚠️ No se encontró la columna 'Estado'. A continuación ves los nombres de columnas leídos:")
-    st.write(list(df.columns))
-    st.stop()
+    df['Estado'] = df['Estado'].fillna('SIN REGISTRAR').astype(str).str.strip().str.upper()
+    df.loc[df['Estado'] == '', 'Estado'] = 'SIN REGISTRAR'
 
-# Búsqueda flexible de Clasificación / Incidente
-col_clasif = None
-for col in df.columns:
-    if "incidente" in col.lower() or "clasificac" in col.lower() or "coyuntural" in col.lower():
-        col_clasif = col
-        break
+# Normalizar Sede
+col_sede = next((c for c in df.columns if "sede" in c.lower()), None)
+if col_sede:
+    df['SEDE'] = df[col_sede].fillna('NO ESPECIFICADA').astype(str).str.strip().str.title()
 
-if col_clasif:
-    df.rename(columns={col_clasif: 'Clasificacion'}, inplace=True)
-    df['Clasificacion'] = df['Clasificacion'].fillna('').astype(str).str.strip().str.upper()
+# Normalizar Incidente
+col_inc = next((c for c in df.columns if "incidente" in c.lower()), None)
+if col_inc:
+    df['Incidente'] = df[col_inc].fillna('NO').astype(str).str.strip().str.upper()
 
-# Crear columna combinada para búsqueda rápida en el Chatbot
+# Búsqueda rápida
 df['_search_text'] = df.apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
-
-# Identificar columna de colaborador
 col_colaborador = [c for c in df.columns if 'colaborador' in c.lower() or 'usuario' in c.lower()]
 
 # ---------------------------------------------------------
@@ -112,15 +88,13 @@ col_colaborador = [c for c in df.columns if 'colaborador' in c.lower() or 'usuar
 # ---------------------------------------------------------
 st.sidebar.header("🔍 Filtros de Datos")
 
-# Filtro por Servicio (Pestañas)
-servicios_disponibles = list(df['Servicio'].unique())
+servicios_disponibles = sorted(list(df['Servicio'].unique()))
 servicio_seleccionado = st.sidebar.multiselect(
     "Filtrar por Servicio / Área:",
     options=servicios_disponibles,
     default=servicios_disponibles
 )
 
-# Filtro por Estado
 estados_disponibles = list(df['Estado'].unique())
 estado_seleccionado = st.sidebar.multiselect(
     "Filtrar por Estado:",
@@ -128,41 +102,20 @@ estado_seleccionado = st.sidebar.multiselect(
     default=estados_disponibles
 )
 
-# Aplicar filtros
 df_f = df[
     (df['Servicio'].isin(servicio_seleccionado)) &
     (df['Estado'].isin(estado_seleccionado))
 ].copy()
 
 # ---------------------------------------------------------
-# 5. CÁLCULO DE MÉTRICAS GENERALES
+# 5. CÁLCULO Y MOSTRADO DE MÉTRICAS
 # ---------------------------------------------------------
 total_registros = len(df_f)
-
 cerrados = (df_f['Estado'] == 'CERRADA').sum()
-pendientes = (df_f['Estado'] == 'ABIERTA').sum()
-
-# Otros estados no especificados
-otros_estados = total_registros - (cerrados + pendientes)
-if otros_estados > 0:
-    pendientes += otros_estados
-
-# Tasa de Cierre
+pendientes = (df_f['Estado'].isin(['ABIERTA', 'SIN REGISTRAR'])).sum()
 tasa_cierre = (cerrados / total_registros * 100) if total_registros > 0 else 0.0
 
-# Conteo de Clasificaciones (Incidentes / Coyunturales)
-incidentes = 0
-coyunturales = 0
-
-if 'Clasificacion' in df_f.columns:
-    incidentes = df_f['Clasificacion'].str.contains('SI|INCIDENTE', na=False).sum()
-    coyunturales = df_f['Clasificacion'].str.contains('COYUNTURAL', na=False).sum()
-
-# ---------------------------------------------------------
-# 6. MOSTRAR MÉTRICAS EN PANTALLA
-# ---------------------------------------------------------
 col1, col2, col3, col4 = st.columns(4)
-
 with col1:
     st.metric("Total Registros", total_registros)
 with col2:
@@ -175,7 +128,82 @@ with col4:
 st.markdown("---")
 
 # ---------------------------------------------------------
-# 7. CHATBOT FLOTANTE OPTIMIZADO CON IA (STREAMING)
+# 6. SECCIÓN DE GRÁFICOS E INTERACTIBA (NUEVA SECCIÓN)
+# ---------------------------------------------------------
+if not df_f.empty:
+    col_g1, col_g2 = st.columns(2)
+
+    with col_g1:
+        st.subheader("📌 Registros por Servicio")
+        df_serv = df_f['Servicio'].value_counts().reset_index()
+        df_serv.columns = ['Servicio', 'Cantidad']
+        fig_serv = px.bar(
+            df_serv, 
+            x='Cantidad', 
+            y='Servicio', 
+            orientation='h',
+            text='Cantidad',
+            color='Cantidad',
+            color_continuous_scale='Blues'
+        )
+        fig_serv.update_layout(yaxis={'categoryorder': 'total ascending'}, showlegend=False)
+        st.plotly_chart(fig_serv, use_container_width=True)
+
+    with col_g2:
+        st.subheader("🍩 Distribución por Estado de Gestión")
+        df_est = df_f['Estado'].value_counts().reset_index()
+        df_est.columns = ['Estado', 'Cantidad']
+        fig_est = px.pie(
+            df_est, 
+            names='Estado', 
+            values='Cantidad', 
+            hole=0.4,
+            color='Estado',
+            color_discrete_map={'CERRADA': '#2ca02c', 'SIN REGISTRAR': '#d62728', 'ABIERTA': '#ff7f0e'}
+        )
+        st.plotly_chart(fig_est, use_container_width=True)
+
+    col_g3, col_g4 = st.columns(2)
+
+    with col_g3:
+        st.subheader("⚠️ Top 5 Causales de Salidas No Conformes")
+        col_desc = next((c for c in df_f.columns if "descripción" in c.lower() or "descripcion" in c.lower()), None)
+        if col_desc:
+            top_causas = df_f[col_desc].value_counts().head(5).reset_index()
+            top_causas.columns = ['Descripción', 'Cantidad']
+            fig_causas = px.bar(
+                top_causas, 
+                x='Cantidad', 
+                y='Descripción', 
+                orientation='h',
+                text='Cantidad',
+                color_discrete_sequence=['#e377c2']
+            )
+            fig_causas.update_layout(yaxis={'categoryorder': 'total ascending'})
+            st.plotly_chart(fig_causas, use_container_width=True)
+
+    with col_g4:
+        st.subheader("🏢 Registros por Sede")
+        if 'SEDE' in df_f.columns:
+            df_sede = df_f['SEDE'].value_counts().reset_index()
+            df_sede.columns = ['Sede', 'Cantidad']
+            fig_sede = px.bar(
+                df_sede, 
+                x='Sede', 
+                y='Cantidad', 
+                text='Cantidad',
+                color_discrete_sequence=['#1f77b4']
+            )
+            st.plotly_chart(fig_sede, use_container_width=True)
+
+    # Tabla de datos detallados
+    st.markdown("---")
+    st.subheader("📋 Detalle de Registros de Salidas No Conformes")
+    cols_mostrar = [c for c in df_f.columns if c not in ['_search_text']]
+    st.dataframe(df_f[cols_mostrar], use_container_width=True, height=350)
+
+# ---------------------------------------------------------
+# 7. CHATBOT FLOTANTE CON IA
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
@@ -183,9 +211,7 @@ with st.popover("💬 Asistente IA SNC"):
     st.markdown("### 🤖 Asistente Virtual SNC")
 
     if not gemini_key:
-        gemini_key = st.text_input(
-            "Ingresa tu Gemini API Key:", type="password"
-        )
+        gemini_key = st.text_input("Ingresa tu Gemini API Key:", type="password")
 
     if gemini_key:
         try:
@@ -199,109 +225,44 @@ with st.popover("💬 Asistente IA SNC"):
                     st.markdown(msg["content"])
 
             if user_prompt := st.chat_input("Escribe tu pregunta..."):
-                st.session_state.gemini_messages.append(
-                    {"role": "user", "content": user_prompt}
-                )
+                st.session_state.gemini_messages.append({"role": "user", "content": user_prompt})
                 with st.chat_message("user"):
                     st.markdown(user_prompt)
 
                 palabras_ignorar = {
                     "que", "del", "los", "las", "por", "con", "para", "documento",
                     "cedula", "nit", "numero", "snc", "colmedicos", "hola", "como",
-                    "deberia", "tratar", "esta", "plan", "accion", "recomiendas",
-                    "genero", "generó", "este", "quien", "quienes", "mas", "incidencias",
-                    "usuarios", "colaboradores"
+                    "deberia", "tratar", "esta", "plan", "accion", "recomiendas"
                 }
 
                 tokens = re.findall(r"\b[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+\b", user_prompt)
-                terminos_busqueda = [
-                    t.lower()
-                    for t in tokens
-                    if t.lower() not in palabras_ignorar and len(t) >= 3
-                ]
+                terminos_busqueda = [t.lower() for t in tokens if t.lower() not in palabras_ignorar and len(t) >= 3]
 
                 coincidencias = pd.DataFrame()
-
                 if terminos_busqueda:
                     pattern = "|".join(terminos_busqueda)
-                    coincidencias = df_f[
-                        df_f["_search_text"].str.contains(
-                            pattern, case=False, na=False
-                        )
-                    ]
-
-                resumen_colaboradores = ""
-                if col_colaborador:
-                    top_colab = (
-                        df_f[col_colaborador[0]]
-                        .value_counts()
-                        .head(3)
-                        .to_dict()
-                    )
-                    resumen_colaboradores = "\nTOP COLABORADORES CON MÁS CASOS:\n"
-                    for colab, cant in top_colab.items():
-                        resumen_colaboradores += f"- {colab}: {cant}\n"
-
-                resumen_servicios = ""
-                if "Servicio" in df_f.columns:
-                    top_serv = df_f["Servicio"].value_counts().head(3).to_dict()
-                    resumen_servicios = "\nTOP SERVICIOS CON MÁS CASOS:\n"
-                    for serv, cant in top_serv.items():
-                        resumen_servicios += f"- {serv}: {cant}\n"
-
-                contexto_especifico = ""
-                if not coincidencias.empty:
-                    cols_limpias = [
-                        c
-                        for c in df_f.columns
-                        if c not in ["_search_text"]
-                    ]
-                    registros_encontrados = coincidencias[cols_limpias].head(
-                        3
-                    ).to_dict(orient="records")
-
-                    contexto_especifico = "\n\nREGISTROS ENCONTRADOS:\n"
-                    for idx, reg in enumerate(registros_encontrados, 1):
-                        contexto_especifico += f"\n--- Caso #{idx} ---\n"
-                        for k, v in reg.items():
-                            if pd.notna(v) and str(v).strip() != "":
-                                contexto_especifico += f"- {k}: {v}\n"
+                    coincidencias = df_f[df_f["_search_text"].str.contains(pattern, case=False, na=False)]
 
                 contexto_snc = f"""
                 Eres el Asistente de Gestión de Calidad (SNC) de COLMEDICOS.
-                Responde de forma concisa, directa y estructurada.
-                
-                DATOS DE LA SESIÓN:
+                DATOS ACTUALES:
                 - Total Registros: {total_registros} | Tasa Cierre: {tasa_cierre:.1f}%
-                - Pendientes (Abiertas): {pendientes} | Cerradas: {cerrados}
-                - Incidentes/Coyunturales: {incidentes}
-                {resumen_colaboradores}
-                {resumen_servicios}
-                {contexto_especifico}
+                - Pendientes: {pendientes} | Cerradas: {cerrados}
                 """
 
                 try:
                     model = genai.GenerativeModel("gemini-3.6-flash")
-                    prompt_completo = (
-                        f"{contexto_snc}\n\nPregunta: {user_prompt}"
-                    )
+                    prompt_completo = f"{contexto_snc}\n\nPregunta: {user_prompt}"
 
                     with st.chat_message("assistant"):
-                        response_stream = model.generate_content(
-                            prompt_completo, 
-                            stream=True
-                        )
-                        
+                        response_stream = model.generate_content(prompt_completo, stream=True)
                         def stream_generator():
                             for chunk in response_stream:
                                 yield chunk.text
-
                         full_response = st.write_stream(stream_generator)
 
-                    st.session_state.gemini_messages.append(
-                        {"role": "assistant", "content": full_response}
-                    )
+                    st.session_state.gemini_messages.append({"role": "assistant", "content": full_response})
                 except Exception as err:
-                    st.error(f"Error al procesar la respuesta con la IA: {err}")
-        except Exception as e:
-            st.error("API Key inválida o no configurada correctamente.")
+                    st.error(f"Error en la IA: {err}")
+        except Exception:
+            st.error("API Key no válida.")
