@@ -706,8 +706,12 @@ with st.popover("💬 Asistente IA SNC"):
                 """
 
                 try:
-                    # Ajuste del nombre del modelo agregando el prefijo "models/"
-                    model = genai.GenerativeModel("models/gemini-1.5-flash")
+                    # Inicialización limpia de Gemini con Fallback
+                    try:
+                        model = genai.GenerativeModel("gemini-1.5-flash")
+                    except Exception:
+                        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta: {user_prompt}"
                     )
