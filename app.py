@@ -181,24 +181,27 @@ except Exception as e:
     st.stop()
 
 # ---------------------------------------------------------
-# 6. MAPEO DE COLUMNAS
+# 6. MAPEO PRECISO Y EXACTO DE COLUMNAS SEGÚN ESTRUCTURA
 # ---------------------------------------------------------
-col_sede = [c for c in df.columns if c.upper() == "SEDE"]
-col_estado = [
-    c for c in df.columns if "estado" in c.lower() or "cerrad" in c.lower()
-]
+col_sede = [c for c in df.columns if "SEDE" in c.upper()]
+col_estado = [c for c in df.columns if c.strip().lower() == "estado"]
 col_coyuntural = [
-    c for c in df.columns if "coyuntural" in c.lower() and "Nº" not in c
+    c for c in df.columns if "requiere acción coyuntural" in c.lower()
 ]
 col_incidente = [c for c in df.columns if "incidente" in c.lower()]
-col_proceso = [
-    c for c in df.columns if "proceso" in c.lower() or "área" in c.lower() or "area" in c.lower()
-]
-col_colaborador = [c for c in df.columns if "colaborador" in c.lower()]
-col_momento = [c for c in df.columns if "momento" in c.lower()]
-col_desc = [
-    c for c in df.columns if "descripci" in c.lower() and "snc" in c.lower()
-]
+col_proceso = [c for c in df.columns if "proceso donde se identifica" in c.lower()]
+col_colaborador = [c for c in df.columns if "colaborador que genera" in c.lower()]
+col_momento = [c for c in df.columns if "momento de identificación" in c.lower()]
+
+# Mapeo exacto para Descripción de la salida no conforme
+col_desc = [c for c in df.columns if "descripción de la salida no conforme" in c.lower()]
+if not col_desc:
+    col_desc = [
+        c for c in df.columns 
+        if any(p in c.lower() for p in ["descripci", "hallazgo", "detalle", "motivo"])
+        and "tratamiento" not in c.lower()
+        and "calidad" not in c.lower()
+    ]
 
 # ---------------------------------------------------------
 # 7. FILTROS DINÁMICOS GLOBAL DE LA SIDEBAR
@@ -376,7 +379,7 @@ with t_procesos:
         st.markdown("##### Incidencias por Área / Proceso Específico")
         if col_proceso:
             df_p_data = df_proc_view[df_proc_view[col_proceso[0]].astype(str).str.strip() != ""].copy()
-            df_p_data = df_p_data[df_p_data[col_proceso[0]].notna()]
+            df_p_data = df_p_data[df_p_data[col_proceso[0]].notna() & (df_p_data[col_proceso[0]] != "nan")]
             
             df_p = (
                 df_p_data[col_proceso[0]]
@@ -412,7 +415,7 @@ with t_procesos:
         st.markdown("##### Descripción de Hallazgos Recurrentes")
         if col_desc:
             df_d_data = df_proc_view[df_proc_view[col_desc[0]].astype(str).str.strip() != ""].copy()
-            df_d_data = df_d_data[df_d_data[col_desc[0]].notna()]
+            df_d_data = df_d_data[df_d_data[col_desc[0]].notna() & (df_d_data[col_desc[0]] != "nan")]
 
             df_d = df_d_data[col_desc[0]].value_counts().reset_index().head(8)
             df_d.columns = ["Descripción", "Frecuencia"]
