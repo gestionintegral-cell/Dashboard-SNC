@@ -706,11 +706,20 @@ with st.popover("💬 Asistente IA SNC"):
                 """
 
                 try:
-                    # Inicialización limpia de Gemini con Fallback
-                    try:
-                        model = genai.GenerativeModel("gemini-1.5-flash")
-                    except Exception:
-                        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+                    # Selección dinámica de modelos de alta velocidad
+                    modelos_disponibles = [
+                        "gemini-2.5-flash",
+                        "gemini-2.0-flash",
+                        "gemini-1.5-pro",
+                    ]
+                    model = None
+
+                    for mod in modelos_disponibles:
+                        try:
+                            model = genai.GenerativeModel(mod)
+                            break
+                        except Exception:
+                            continue
 
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta: {user_prompt}"
@@ -718,8 +727,7 @@ with st.popover("💬 Asistente IA SNC"):
 
                     with st.chat_message("assistant"):
                         response_stream = model.generate_content(
-                            prompt_completo,
-                            stream=True
+                            prompt_completo, stream=True
                         )
 
                         def stream_generator():
@@ -733,5 +741,3 @@ with st.popover("💬 Asistente IA SNC"):
                     )
                 except Exception as err:
                     st.error(f"Error al procesar la respuesta con la IA: {err}")
-        except Exception as e:
-            st.error("API Key inválida o no configurada correctamente.")
