@@ -707,7 +707,7 @@ with st.popover("💬 Asistente IA SNC"):
 
                 try:
                     # Modelo estándar activo y de respuesta ultrarrápida
-                    model = genai.GenerativeModel("gemini-2.0-flash")
+                    model = genai.GenerativeModel("gemini-3.6-flash")
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta: {user_prompt}"
                     )
