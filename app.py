@@ -495,7 +495,7 @@ with st.popover("💬 Asistente IA SNC"):
                 with st.chat_message("user"):
                     st.markdown(user_prompt)
 
-                numeros_buscados = re.findall(r"\b\d+\b", user_prompt)
+                # Palabras comunes a ignorar en la búsqueda de texto
                 palabras_ignorar = {
                     "que",
                     "del",
@@ -518,27 +518,24 @@ with st.popover("💬 Asistente IA SNC"):
                     "plan",
                     "accion",
                     "recomiendas",
+                    "genero",
+                    "generó",
+                    "este",
                 }
-                palabras_buscadas = [
-                    p.lower()
-                    for p in re.findall(
-                        r"\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]{3,}\b", user_prompt
-                    )
-                    if p.lower() not in palabras_ignorar
+
+                # Extrae términos alfanuméricos (letras + números como PT6085230, o solo números/letras)
+                tokens = re.findall(r"\b[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+\b", user_prompt)
+                terminos_busqueda = [
+                    t.lower()
+                    for t in tokens
+                    if t.lower() not in palabras_ignorar and len(t) >= 3
                 ]
 
                 coincidencias = pd.DataFrame()
 
-                if numeros_buscados:
-                    pattern = "|".join(numeros_buscados)
-                    coincidencias = df_f[
-                        df_f["_search_text"].str.contains(
-                            pattern, case=False, na=False
-                        )
-                    ]
-
-                if coincidencias.empty and palabras_buscadas:
-                    pattern = "|".join(palabras_buscadas)
+                if terminos_busqueda:
+                    # Búsqueda coincidente en el texto consolidado
+                    pattern = "|".join(terminos_busqueda)
                     coincidencias = df_f[
                         df_f["_search_text"].str.contains(
                             pattern, case=False, na=False
@@ -568,6 +565,7 @@ with st.popover("💬 Asistente IA SNC"):
                 
                 REGLAS DE RESPUESTA:
                 - Responde de forma clara, directa y estructurada.
+                - Si se encuentra un registro, presenta detalladamente sus datos.
                 - Si te piden un TRATAMIENTO: indica la corrección inmediata recomendada y el manejo del evento.
                 - Si te piden PLAN DE ACCIÓN / MEJORA: sugiere metodología (5 Porqués / Causa Raíz) con Actividad, Responsable y Seguimiento.
                 
