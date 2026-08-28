@@ -1,4 +1,5 @@
 import base64
+import os
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -11,14 +12,27 @@ st.set_page_config(
 )
 
 
-# 2. Función helper para procesar imágenes locales en CSS (Base64)
-def get_base64_image(file_path):
-    try:
-        with open(file_path, "rb") as f:
+# 2. Función helper para localizar e integrar imágenes locales en Base64/Streamlit
+def buscar_archivo_imagen(nombre_base):
+    """Busca la imagen en la raíz o en .devcontainer y la devuelve"""
+    posibles_rutas = [
+        nombre_base,
+        f".devcontainer/{nombre_base}",
+        f"{nombre_base}.png",
+        f".devcontainer/{nombre_base}.png",
+    ]
+    for ruta in posibles_rutas:
+        if os.path.exists(ruta):
+            return ruta
+    return None
+
+
+def get_base64_image(ruta_archivo):
+    if ruta_archivo and os.path.exists(ruta_archivo):
+        with open(ruta_archivo, "rb") as f:
             data = f.read()
         return base64.b64encode(data).decode()
-    except Exception:
-        return ""
+    return ""
 
 
 # 3. Estilos CSS personalizados (Identidad Institucional COLMEDICOS)
@@ -54,11 +68,13 @@ st.markdown(
 )
 
 # 4. Carga del Logo en el Panel Lateral
-try:
-    st.sidebar.image("logo_colmedicos.png", use_container_width=True)
-except Exception:
-    st.sidebar.warning(
-        "Asegúrate de haber subido 'logo_colmedicos.png' a tu repositorio."
+ruta_logo = buscar_archivo_imagen("logo_colmedicos.png")
+if ruta_logo:
+    st.sidebar.image(ruta_logo, use_container_width=True)
+else:
+    st.sidebar.markdown(
+        "<h2 style='color: #1A2B6D; text-align: center;'>COLMEDICOS</h2>",
+        unsafe_allow_html=True,
     )
 
 st.sidebar.markdown("---")
@@ -137,7 +153,8 @@ if servicios_seleccionados:
     df_f = df_f[df_f["Servicio"].isin(servicios_seleccionados)]
 
 # 8. Generación del Banner Institucional
-banner_b64 = get_base64_image("banner_colmedicos.png")
+ruta_banner = buscar_archivo_imagen("banner_colmedicos.png")
+banner_b64 = get_base64_image(ruta_banner)
 
 if banner_b64:
     st.markdown(
@@ -166,12 +183,11 @@ if banner_b64:
         unsafe_allow_html=True,
     )
 else:
-    # Encabezado estándar si no se encuentra la imagen del banner
     st.markdown(
         """
-        <div style="background-color: #1A2B6D; padding: 20px; border-radius: 8px; color: white; margin-bottom: 20px;">
-            <h2 style="margin: 0;">Control de Salidas No Conformes (SNC)</h2>
-            <p style="margin: 5px 0 0 0; color: #D1D5DB;">Monitoreo del Sistema de Gestión de Calidad | <span style="color: #F58220; font-weight: 600;">Las personas son nuestra razón de ser</span></p>
+        <div style="background-color: #1A2B6D; padding: 25px; border-radius: 10px; color: white; margin-bottom: 25px;">
+            <h2 style="margin: 0; font-weight: 700;">Control de Salidas No Conformes (SNC)</h2>
+            <p style="margin: 6px 0 0 0; color: #FFFFFF;">Monitoreo del Sistema de Gestión de Calidad | <span style="color: #F58220; font-weight: 600; font-style: italic;">Las personas son nuestra razón de ser</span></p>
         </div>
     """,
         unsafe_allow_html=True,
