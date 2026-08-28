@@ -40,8 +40,39 @@ def get_base64_image(ruta_archivo):
     return ""
 
 
-def es_afirmativo(val):
-    """Normaliza y valida valores booleanos/afirmativos ignorando tildes y espacios."""
+def es_afirmativo_o_cerrado(val):
+    """
+    Normaliza y valida valores para determinar si un caso está CERRADO.
+    Considera variaciones de afirmativos (SI, YES, TRUE, 1) y términos de cierre (CERRADO, CERRADA, FINALIZADO).
+    """
+    if pd.isna(val):
+        return False
+    
+    val_str = str(val).strip().upper()
+    
+    # Reemplazo de tildes
+    val_str = (
+        val_str.replace("Í", "I")
+        .replace("Á", "A")
+        .replace("É", "E")
+        .replace("Ó", "O")
+        .replace("Ú", "U")
+    )
+    
+    # Lista explícita de coincidencia exacta
+    valores_validos = ["SI", "S", "TRUE", "1", "YES", "CERRADO", "CERRADA", "FINALIZADO", "OK", "RESUELTO"]
+    if val_str in valores_validos:
+        return True
+        
+    # Coincidencia por subcadena para casos con descripciones largas (ej. "CERRADO CON ACCIÓN")
+    if any(k in val_str for k in ["CERRAD", "FINALIZAD", "RESUELT"]):
+        return True
+
+    return False
+
+
+def es_afirmativo_general(val):
+    """Validación estándar para banderas tipo 'Requiere acción coyuntural' o 'Incidente'."""
     if pd.isna(val):
         return False
     val_str = (
@@ -273,18 +304,18 @@ else:
 # ---------------------------------------------------------
 total_eventos = len(df_f)
 cerrados = (
-    len(df_f[df_f[col_estado[0]].apply(es_afirmativo)])
+    len(df_f[df_f[col_estado[0]].apply(es_afirmativo_o_cerrado)])
     if col_estado
     else 0
 )
 pendientes = total_eventos - cerrados
 coyunturales = (
-    len(df_f[df_f[col_coyuntural[0]].apply(es_afirmativo)])
+    len(df_f[df_f[col_coyuntural[0]].apply(es_afirmativo_general)])
     if col_coyuntural
     else 0
 )
 incidentes = (
-    len(df_f[df_f[col_incidente[0]].apply(es_afirmativo)])
+    len(df_f[df_f[col_incidente[0]].apply(es_afirmativo_general)])
     if col_incidente
     else 0
 )
@@ -335,13 +366,13 @@ segmento = st.radio(
 )
 
 if segmento == "Pendientes" and col_estado:
-    df_v = df_f[~df_f[col_estado[0]].apply(es_afirmativo)]
+    df_v = df_f[~df_f[col_estado[0]].apply(es_afirmativo_o_cerrado)]
 elif segmento == "Cerrados" and col_estado:
-    df_v = df_f[df_f[col_estado[0]].apply(es_afirmativo)]
+    df_v = df_f[df_f[col_estado[0]].apply(es_afirmativo_o_cerrado)]
 elif segmento == "Con acción coyuntural" and col_coyuntural:
-    df_v = df_f[df_f[col_coyuntural[0]].apply(es_afirmativo)]
+    df_v = df_f[df_f[col_coyuntural[0]].apply(es_afirmativo_general)]
 elif segmento == "Incidentes" and col_incidente:
-    df_v = df_f[df_f[col_incidente[0]].apply(es_afirmativo)]
+    df_v = df_f[df_f[col_incidente[0]].apply(es_afirmativo_general)]
 else:
     df_v = df_f.copy()
 
@@ -636,8 +667,8 @@ with st.popover("💬 Asistente IA SNC"):
                 """
 
                 try:
-                    # Modelo actualizado gemini-3.6-flash con Streaming activado
-                    model = genai.GenerativeModel("gemini-3.6-flash")
+                    # Modelo actualizado gemini-1.5-flash
+                    model = genai.GenerativeModel("gemini-1.5-flash")
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta: {user_prompt}"
                     )
