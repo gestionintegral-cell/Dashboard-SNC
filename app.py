@@ -154,7 +154,7 @@ def cargar_base_datos():
         df_hoja["Servicio"] = hoja
         registros.append(df_hoja)
 
-    df_total = pd.concat(registros, ignore_ignore_index=True if "ignore_index" in pd.concat.__doc__ else False, ignore_index=True)
+    df_total = pd.concat(registros, ignore_index=True)
 
     for col in df_total.columns:
         if df_total[col].dtype == "object":
@@ -375,7 +375,6 @@ with t_procesos:
     with col_left:
         st.markdown("##### Incidencias por Área / Proceso Específico")
         if col_proceso:
-            # Filtrar vacíos o sin especificar
             df_p_data = df_proc_view[df_proc_view[col_proceso[0]].astype(str).str.strip() != ""].copy()
             df_p_data = df_p_data[df_p_data[col_proceso[0]].notna()]
             
@@ -485,7 +484,6 @@ with t_personas:
     with p_col2:
         st.markdown("##### Distribución por Servicio")
         
-        # Filtro propio local para la pestaña de Personal
         opciones_servicio_personal = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
         servicio_personal_sel = st.selectbox(
             "Filtrar gráfico por servicio:",
@@ -565,7 +563,8 @@ with st.popover("💬 Asistente IA SNC"):
                     "que", "del", "los", "las", "por", "con", "para", "documento",
                     "cedula", "nit", "numero", "snc", "colmedicos", "hola", "como",
                     "deberia", "tratar", "esta", "plan", "accion", "recomiendas",
-                    "genero", "generó", "este"
+                    "genero", "generó", "este", "quien", "quienes", "mas", "incidencias",
+                    "usuarios", "colaboradores"
                 }
 
                 tokens = re.findall(r"\b[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+\b", user_prompt)
@@ -585,6 +584,26 @@ with st.popover("💬 Asistente IA SNC"):
                         )
                     ]
 
+                # Resumen de Top Colaboradores para la IA
+                resumen_colaboradores = ""
+                if col_colaborador:
+                    top_colab = (
+                        df_f[col_colaborador[0]]
+                        .value_counts()
+                        .head(5)
+                        .to_dict()
+                    )
+                    resumen_colaboradores = "\nTOP 5 COLABORADORES CON MÁS REGISTROS / INCIDENCIAS:\n"
+                    for colab, cant in top_colab.items():
+                        resumen_colaboradores += f"- {colab}: {cant} caso(s)\n"
+
+                # Resumen de Top Servicios
+                resumen_servicios = ""
+                top_serv = df_f["Servicio"].value_counts().head(5).to_dict()
+                resumen_servicios = "\nTOP SERVICIOS CON MÁS REGISTROS:\n"
+                for serv, cant in top_serv.items():
+                    resumen_servicios += f"- {serv}: {cant} caso(s)\n"
+
                 contexto_especifico = ""
                 if not coincidencias.empty:
                     cols_limpias = [
@@ -596,7 +615,7 @@ with st.popover("💬 Asistente IA SNC"):
                         5
                     ).to_dict(orient="records")
 
-                    contexto_especifico = "\n\nREGISTROS COINCIDENTES ENCONTRADOS EN EL SISTEMA:\n"
+                    contexto_especifico = "\n\nREGISTROS ESPECÍFICOS ENCONTRADOS POR BÚSQUEDA:\n"
                     for idx, reg in enumerate(registros_encontrados, 1):
                         contexto_especifico += f"\n--- Caso #{idx} ---\n"
                         for k, v in reg.items():
@@ -608,13 +627,16 @@ with st.popover("💬 Asistente IA SNC"):
                 
                 REGLAS DE RESPUESTA:
                 - Responde de forma clara, directa y estructurada.
-                - Si se encuentra un registro, presenta detalladamente sus datos.
+                - Si te preguntan por colaboradores/usuarios o servicios con más incidencias, utiliza la información resumida proporcionada a continuación.
+                - Si se encuentra un registro específico, presenta detalladamente sus datos.
                 - Si te piden un TRATAMIENTO: indica la corrección inmediata recomendada y el manejo del evento.
                 - Si te piden PLAN DE ACCIÓN / MEJORA: sugiere metodología (5 Porqués / Causa Raíz) con Actividad, Responsable y Seguimiento.
                 
-                RESUMEN DE DATOS ACTUALES:
+                RESUMEN DE DATOS ACTUALES (FILTRADOS):
                 - Registros totales: {len(df_f)} | Efectividad cierre: {tasa_cierre:.1f}%
                 - Pendientes: {pendientes} | Cerrados: {cerrados} | Acciones coyunturales: {coyunturales} | Incidentes: {incidentes}
+                {resumen_colaboradores}
+                {resumen_servicios}
                 {contexto_especifico}
                 """
 
