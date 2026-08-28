@@ -3,51 +3,28 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-# Configuración de página
+# 1. Configuración principal de la interfaz
 st.set_page_config(
-    page_title="COLMEDICOS | Sistema de Control de SNC",
+    page_title="COLMEDICOS | Control de SNC",
     page_icon="🏥",
     layout="wide",
 )
 
 
-# Función para convertir imágenes locales a formato Base64
+# 2. Función helper para procesar imágenes locales en CSS (Base64)
 def get_base64_image(file_path):
-    with open(file_path, "rb") as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except Exception:
+        return ""
 
 
-# Estilos CSS personalizados inspirados en la identidad visual de COLMEDICOS
+# 3. Estilos CSS personalizados (Identidad Institucional COLMEDICOS)
 st.markdown(
     """
     <style>
-    /* Paleta principal: Azul institucional (#1A2B6D) y Dorado/Naranja (#F58220) */
-    .header-container {
-        background: linear-gradient(135deg, #1A2B6D 0%, #2A3F90 70%, #101B46 100%);
-        padding: 24px 30px;
-        border-radius: 12px;
-        color: white;
-        margin-bottom: 25px;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.12);
-    }
-    .header-title {
-        font-size: 28px;
-        font-weight: 700;
-        color: #FFFFFF;
-        margin: 0;
-        letter-spacing: 0.5px;
-    }
-    .header-subtitle {
-        font-size: 15px;
-        color: #D1D5DB;
-        margin-top: 4px;
-        font-style: italic;
-    }
-    .header-subtitle span {
-        color: #F58220;
-        font-weight: 600;
-    }
     .metric-card {
         background-color: #FFFFFF;
         border-left: 4px solid #1A2B6D;
@@ -76,13 +53,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Carga del logo transparente de Colmedicos
-st.sidebar.image("logo_colmedicos.png", use_container_width=True)
+# 4. Carga del Logo en el Panel Lateral
+try:
+    st.sidebar.image("logo_colmedicos.png", use_container_width=True)
+except Exception:
+    st.sidebar.warning(
+        "Asegúrate de haber subido 'logo_colmedicos.png' a tu repositorio."
+    )
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Filtros Operativos")
 
 
-# --- CARGA DE DATOS ---
+# 5. Carga y consolidación dinámica desde Google Sheets
 @st.cache_data(ttl=60)
 def cargar_base_datos():
     url = "https://docs.google.com/spreadsheets/d/1N9So7ddadDxy2TPhpZZUsnqlLUn6my-FvByFg3dOYf0/export?format=xlsx"
@@ -96,6 +79,7 @@ def cargar_base_datos():
 
     df_total = pd.concat(registros, ignore_index=True)
 
+    # Procesamiento de columna de fechas
     col_fecha = [
         c
         for c in df_total.columns
@@ -113,10 +97,10 @@ def cargar_base_datos():
 try:
     df = cargar_base_datos()
 except Exception as e:
-    st.error(f"Error en la conexión con la base de datos: {e}")
+    st.error(f"No fue posible conectar con la base de datos de Google Sheets: {e}")
     st.stop()
 
-# Mapeo de columnas
+# 6. Mapeo de columnas del archivo
 col_sede = [c for c in df.columns if c.upper() == "SEDE"]
 col_estado = [
     c for c in df.columns if "estado" in c.lower() or "cerrad" in c.lower()
@@ -134,7 +118,7 @@ col_desc = [
     c for c in df.columns if "descripci" in c.lower() and "snc" in c.lower()
 ]
 
-# Filtros laterales
+# 7. Filtros dinámicos en el panel lateral
 sedes_disponibles = list(df[col_sede[0]].dropna().unique()) if col_sede else []
 servicios_disponibles = list(df["Servicio"].dropna().unique())
 
@@ -145,57 +129,55 @@ servicios_seleccionados = st.sidebar.multiselect(
     "Servicio / Área", servicios_disponibles, default=servicios_disponibles
 )
 
-# Aplicar Filtros
+# Aplicar filtros
 df_f = df.copy()
 if sedes_seleccionadas and col_sede:
     df_f = df_f[df_f[col_sede[0]].isin(sedes_seleccionadas)]
 if servicios_seleccionados:
     df_f = df_f[df_f["Servicio"].isin(servicios_seleccionados)]
 
-# Convertir el archivo del banner guardado en el repositorio
+# 8. Generación del Banner Institucional
 banner_b64 = get_base64_image("banner_colmedicos.png")
 
-# Renderizar el banner con la imagen de fondo de Colmedicos
-st.markdown(
-    f"""
-    <style>
-    .custom-banner {{
-        background-image: linear-gradient(rgba(26, 43, 109, 0.75), rgba(26, 43, 109, 0.85)), url("data:image/png;base64,{banner_b64}");
-        background-size: cover;
-        background-position: center;
-        padding: 30px;
-        border-radius: 10px;
-        color: white;
-        margin-bottom: 25px;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.15);
-    }}
-    .banner-title {{
-        font-size: 28px;
-        font-weight: 700;
-        color: #FFFFFF;
-        margin: 0;
-    }}
-    .banner-subtitle {{
-        font-size: 15px;
-        color: #FFFFFF;
-        margin-top: 6px;
-    }}
-    .banner-highlight {{
-        color: #F58220;
-        font-weight: 600;
-        font-style: italic;
-    }}
-    </style>
-    
-    <div class="custom-banner">
-        <div class="banner-title">Control de Salidas No Conformes (SNC)</div>
-        <div class="banner-subtitle">Monitoreo del Sistema de Gestión de Calidad | <span class="banner-highlight">Las personas son nuestra razón de ser</span></div>
-    </div>
-""",
-    unsafe_allow_html=True,
-)
+if banner_b64:
+    st.markdown(
+        f"""
+        <style>
+        .custom-banner {{
+            background-image: linear-gradient(rgba(26, 43, 109, 0.75), rgba(26, 43, 109, 0.85)), url("data:image/png;base64,{banner_b64}");
+            background-size: cover;
+            background-position: center;
+            padding: 30px;
+            border-radius: 10px;
+            color: white;
+            margin-bottom: 25px;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.15);
+        }}
+        .banner-title {{ font-size: 28px; font-weight: 700; color: #FFFFFF; margin: 0; }}
+        .banner-subtitle {{ font-size: 15px; color: #FFFFFF; margin-top: 6px; }}
+        .banner-highlight {{ color: #F58220; font-weight: 600; font-style: italic; }}
+        </style>
+        
+        <div class="custom-banner">
+            <div class="banner-title">Control de Salidas No Conformes (SNC)</div>
+            <div class="banner-subtitle">Monitoreo del Sistema de Gestión de Calidad | <span class="banner-highlight">Las personas son nuestra razón de ser</span></div>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
+else:
+    # Encabezado estándar si no se encuentra la imagen del banner
+    st.markdown(
+        """
+        <div style="background-color: #1A2B6D; padding: 20px; border-radius: 8px; color: white; margin-bottom: 20px;">
+            <h2 style="margin: 0;">Control de Salidas No Conformes (SNC)</h2>
+            <p style="margin: 5px 0 0 0; color: #D1D5DB;">Monitoreo del Sistema de Gestión de Calidad | <span style="color: #F58220; font-weight: 600;">Las personas son nuestra razón de ser</span></p>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
 
-# Cálculo de variables
+# 9. Métricas y KPIs clave
 total_eventos = len(df_f)
 cerrados = (
     len(df_f[df_f[col_estado[0]].astype(str).str.upper() == "SÍ"])
@@ -215,7 +197,6 @@ incidentes = (
 )
 tasa_cierre = (cerrados / total_eventos * 100) if total_eventos > 0 else 0.0
 
-# Tarjetas KPI
 m1, m2, m3, m4, m5 = st.columns(5)
 with m1:
     st.markdown(
@@ -245,7 +226,7 @@ with m5:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Segmentación rápida
+# 10. Segmentación rápida por estado
 segmento = st.radio(
     "Filtrar por estado operacional:",
     [
@@ -271,7 +252,7 @@ else:
 
 st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
 
-# Pestañas analíticas
+# 11. Pestañas de Análisis Corporativo
 t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     [
         "Análisis por Proceso / Área",
@@ -281,6 +262,7 @@ t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     ]
 )
 
+# PESTAÑA 1: PROCESOS Y CAUSAS
 with t_procesos:
     col_left, col_right = st.columns(2)
 
@@ -357,6 +339,7 @@ with t_procesos:
         fig_m.update_layout(margin=dict(l=0, r=0, t=20, b=20))
         st.plotly_chart(fig_m, use_container_width=True)
 
+# PESTAÑA 2: EVOLUCIÓN TEMPORAL
 with t_tiempo:
     st.markdown("##### Comportamiento Mensual de Registros")
     if "Periodo" in df_v.columns and not df_v["Periodo"].dropna().empty:
@@ -376,6 +359,7 @@ with t_tiempo:
     else:
         st.info("No hay suficientes datos temporales cargados.")
 
+# PESTAÑA 3: GESTIÓN POR PERSONAL
 with t_personas:
     p_col1, p_col2 = st.columns(2)
 
@@ -402,11 +386,12 @@ with t_personas:
         fig_s.update_layout(margin=dict(l=0, r=0, t=20, b=20))
         st.plotly_chart(fig_s, use_container_width=True)
 
+# PESTAÑA 4: REGISTRO COMPLETO Y EXPORTACIÓN
 with t_tabla:
     st.markdown(f"##### Registros ({segmento})")
     csv = df_v.to_csv(index=False).encode("utf-8")
     st.download_button(
-        label="Exportar a CSV",
+        label="Exportar vista a CSV",
         data=csv,
         file_name="snc_colmedicos.csv",
         mime="text/csv",
