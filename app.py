@@ -1,5 +1,6 @@
 import base64
 import os
+import re
 import google.generativeai as genai
 import pandas as pd
 import plotly.express as px
@@ -40,11 +41,12 @@ def get_base64_image(ruta_archivo):
 
 
 # ---------------------------------------------------------
-# 3. ESTILOS CSS PERSONALIZADOS (IDENTIDAD COLMEDICOS)
+# 3. ESTILOS CSS PERSONALIZADOS & BOTÓN CHAT FLOTANTE
 # ---------------------------------------------------------
 st.markdown(
     """
     <style>
+    /* Tarjetas de métricas */
     .metric-card {
         background-color: #FFFFFF;
         border-left: 4px solid #1A2B6D;
@@ -68,17 +70,40 @@ st.markdown(
         font-weight: 800;
         margin-top: 2px;
     }
+
+    /* Posicionamiento del Popover flotante en esquina inferior derecha */
+    div[data-testid="stPopover"] {
+        position: fixed;
+        bottom: 25px;
+        right: 25px;
+        z-index: 999999;
+    }
+    
+    div[data-testid="stPopover"] > button {
+        background-color: #1A2B6D !important;
+        color: white !important;
+        border-radius: 30px !important;
+        padding: 12px 24px !important;
+        font-weight: bold !important;
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.3) !important;
+        border: none !important;
+    }
+    
+    div[data-testid="stPopover"] > button:hover {
+        background-color: #F58220 !important;
+        color: white !important;
+    }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
 # ---------------------------------------------------------
-# 4. CARGA DEL LOGO EN EL PANEL LATERAL
+# 4. LOGO EN LA BARRA LATERAL
 # ---------------------------------------------------------
 ruta_logo = buscar_archivo_imagen("logo_colmedicos.png")
 if ruta_logo:
-    st.sidebar.image(ruta_logo, use_container_width=True)
+    st.sidebar.image(ruta_logo, width=220)
 else:
     st.sidebar.markdown(
         "<h2 style='color: #1A2B6D; text-align: center;'>COLMEDICOS</h2>",
@@ -90,7 +115,7 @@ st.sidebar.markdown("### Filtros Operativos")
 
 
 # ---------------------------------------------------------
-# 5. CARGA Y CONSOLIDACIÓN DINÁMICA (GOOGLE SHEETS)
+# 5. CARGA Y CONSOLIDACIÓN DINÁMICA DE DATOS
 # ---------------------------------------------------------
 @st.cache_data(ttl=60)
 def cargar_base_datos():
@@ -100,12 +125,16 @@ def cargar_base_datos():
 
     for hoja in xls.sheet_names:
         df_hoja = pd.read_excel(xls, sheet_name=hoja)
+        df_hoja.columns = [str(col).strip() for col in df_hoja.columns]
         df_hoja["Servicio"] = hoja
         registros.append(df_hoja)
 
     df_total = pd.concat(registros, ignore_index=True)
 
-    # Procesamiento de columna de fechas
+    for col in df_total.columns:
+        if df_total[col].dtype == "object":
+            df_total[col] = df_total[col].astype(str)
+
     col_fecha = [
         c
         for c in df_total.columns
@@ -127,7 +156,7 @@ except Exception as e:
     st.stop()
 
 # ---------------------------------------------------------
-# 6. MAPEO AUTOMÁTICO DE COLUMNAS
+# 6. MAPEO DE COLUMNAS
 # ---------------------------------------------------------
 col_sede = [c for c in df.columns if c.upper() == "SEDE"]
 col_estado = [
@@ -164,6 +193,9 @@ if sedes_seleccionadas and col_sede:
     df_f = df_f[df_f[col_sede[0]].isin(sedes_seleccionadas)]
 if servicios_seleccionados:
     df_f = df_f[df_f["Servicio"].isin(servicios_seleccionados)]
+
+# Índice de búsqueda ultrarrápido
+df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
 
 # ---------------------------------------------------------
 # 8. BANNER INSTITUCIONAL
@@ -209,7 +241,7 @@ else:
     )
 
 # ---------------------------------------------------------
-# 9. METRICAS Y KPIS CLAVE
+# 9. MÉTRICAS Y KPIS CLAVE
 # ---------------------------------------------------------
 total_eventos = len(df_f)
 cerrados = (
@@ -333,7 +365,7 @@ with t_procesos:
                 yaxis={"categoryorder": "total ascending"},
                 margin=dict(l=0, r=20, t=20, b=20),
             )
-            st.plotly_chart(fig_p, use_container_width=True)
+            st.plotly_chart(fig_p, width=None)
 
     with col_right:
         st.markdown("##### Descripción de Hallazgos Recurrentes")
@@ -352,7 +384,7 @@ with t_procesos:
                 yaxis={"categoryorder": "total ascending"},
                 margin=dict(l=0, r=20, t=20, b=20),
             )
-            st.plotly_chart(fig_d, use_container_width=True)
+            st.plotly_chart(fig_d, width=None)
 
     st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
     if col_momento:
@@ -365,7 +397,7 @@ with t_procesos:
             color_discrete_sequence=px.colors.qualitative.Set2,
         )
         fig_m.update_layout(margin=dict(l=0, r=0, t=20, b=20))
-        st.plotly_chart(fig_m, use_container_width=True)
+        st.plotly_chart(fig_m, width=None)
 
 with t_tiempo:
     st.markdown("##### Comportamiento Mensual de Registros")
@@ -381,7 +413,7 @@ with t_tiempo:
         )
         fig_t.update_traces(line_color="#1A2B6D", line_width=3)
         fig_t.update_layout(margin=dict(l=0, r=0, t=20, b=20))
-        st.plotly_chart(fig_t, use_container_width=True)
+        st.plotly_chart(fig_t, width=None)
     else:
         st.info("No hay suficientes datos temporales cargados.")
 
@@ -394,7 +426,7 @@ with t_personas:
                 df_v[col_colaborador[0]].value_counts().reset_index().head(10)
             )
             df_c.columns = ["Colaborador", "Registros"]
-            st.dataframe(df_c, use_container_width=True)
+            st.dataframe(df_c, width=None)
 
     with p_col2:
         st.markdown("##### Distribución por Servicio")
@@ -410,39 +442,36 @@ with t_personas:
             ],
         )
         fig_s.update_layout(margin=dict(l=0, r=0, t=20, b=20))
-        st.plotly_chart(fig_s, use_container_width=True)
+        st.plotly_chart(fig_s, width=None)
 
 with t_tabla:
     st.markdown(f"##### Registros ({segmento})")
-    csv = df_v.to_csv(index=False).encode("utf-8")
+    df_export = df_v.drop(columns=["_search_text"], errors="ignore")
+    csv = df_export.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="Exportar vista a CSV",
         data=csv,
         file_name="snc_colmedicos.csv",
         mime="text/csv",
     )
-    st.dataframe(df_v, use_container_width=True)
+    st.dataframe(df_export, width=None)
 
 # ---------------------------------------------------------
-# 12. CHATBOT CON IA GRATUITO (Google Gemini)
+# 12. CHATBOT FLOTANTE EN ESQUINA INFERIOR DERECHA
 # ---------------------------------------------------------
-import re
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🤖 Asistente Virtual SNC")
-
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
-if not gemini_key:
-    gemini_key = st.sidebar.text_input(
-        "Ingresa tu Gemini API Key:", type="password"
-    )
+with st.popover("💬 Asistente IA SNC"):
+    st.markdown("### 🤖 Asistente Virtual SNC")
 
-if gemini_key:
-    try:
-        genai.configure(api_key=gemini_key)
+    if not gemini_key:
+        gemini_key = st.text_input(
+            "Ingresa tu Gemini API Key:", type="password"
+        )
 
-        with st.sidebar.expander("💬 Abrir Chat de Consultas", expanded=False):
+    if gemini_key:
+        try:
+            genai.configure(api_key=gemini_key)
 
             if "gemini_messages" not in st.session_state:
                 st.session_state.gemini_messages = []
@@ -458,80 +487,70 @@ if gemini_key:
                 with st.chat_message("user"):
                     st.markdown(user_prompt)
 
-                # ----------------------------------------------------
-                # BUSCADOR DINÁMICO EN EL DATAFRAME COMPLETO
-                # ----------------------------------------------------
                 numeros_buscados = re.findall(r"\b\d+\b", user_prompt)
+                palabras_ignorar = {
+                    "que",
+                    "del",
+                    "los",
+                    "las",
+                    "por",
+                    "con",
+                    "para",
+                    "documento",
+                    "cedula",
+                    "nit",
+                    "numero",
+                    "snc",
+                    "colmedicos",
+                    "hola",
+                    "como",
+                    "deberia",
+                    "tratar",
+                    "esta",
+                    "plan",
+                    "accion",
+                    "recomiendas",
+                }
                 palabras_buscadas = [
-                    p
+                    p.lower()
                     for p in re.findall(
                         r"\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]{3,}\b", user_prompt
                     )
-                    if p.lower()
-                    not in [
-                        "que",
-                        "del",
-                        "los",
-                        "las",
-                        "por",
-                        "con",
-                        "para",
-                        "documento",
-                        "cedula",
-                        "nit",
-                        "numero",
-                        "snc",
-                        "colmedicos",
-                        "hola",
-                        "como",
-                        "deberia",
-                        "tratar",
-                        "esta",
-                        "plan",
-                        "accion",
-                        "recomiendas",
-                    ]
+                    if p.lower() not in palabras_ignorar
                 ]
 
                 coincidencias = pd.DataFrame()
 
-                # 1. Búsqueda por número de identificación o NIT
                 if numeros_buscados:
-                    mask_num = pd.Series(False, index=df_f.index)
-                    for num in numeros_buscados:
-                        for col in df_f.columns:
-                            mask_num = mask_num | df_f[col].astype(
-                                str
-                            ).str.contains(num, na=False)
-                    coincidencias = df_f[mask_num]
+                    pattern = "|".join(numeros_buscados)
+                    coincidencias = df_f[
+                        df_f["_search_text"].str.contains(
+                            pattern, case=False, na=False
+                        )
+                    ]
 
-                # 2. Búsqueda por palabras clave si no dio resultado por número
                 if coincidencias.empty and palabras_buscadas:
-                    mask_pal = pd.Series(False, index=df_f.index)
-                    for pal in palabras_buscadas:
-                        for col in df_f.columns:
-                            mask_pal = mask_pal | df_f[col].astype(
-                                str
-                            ).str.lower().str.contains(
-                                pal.lower(), na=False, regex=False
-                            )
-                    coincidencias = df_f[mask_pal]
+                    pattern = "|".join(palabras_buscadas)
+                    coincidencias = df_f[
+                        df_f["_search_text"].str.contains(
+                            pattern, case=False, na=False
+                        )
+                    ]
 
-                # Construcción del contexto detallado
                 contexto_especifico = ""
                 if not coincidencias.empty:
                     cols_limpias = [
                         c
                         for c in df_f.columns
-                        if c not in ["Fecha_DT", "Periodo"]
+                        if c not in ["Fecha_DT", "Periodo", "_search_text"]
                     ]
                     registros_encontrados = coincidencias[cols_limpias].head(
-                        10
+                        5
                     ).to_dict(orient="records")
 
-                    contexto_especifico = "\n\nREGISTROS ESPECÍFICOS ENCONTRADOS QUE COINCIDEN CON LA CONSULTA:\n"
+                    contexto_especifico = "\n\nREGISTROS COINCIDENTES ENCONTRADOS EN EL SISTEMA:\n"
                     for idx, reg in enumerate(registros_encontrados, 1):
-                        contexto_especifico += f"\n--- Registro #{idx} ---\n"
+                        contexto_especifico += f"\n--- Caso #{idx} ---\n"
                         for k, v in reg.items():
                             if pd.notna(v) and str(v).strip() != "":
                                 contexto_especifico += f"- {k}: {v}\n"
@@ -539,29 +558,15 @@ if gemini_key:
                 contexto_snc = f"""
                 Eres el Asistente Experto en Gestión de Calidad y Salidas No Conformes (SNC) de COLMEDICOS.
                 
-                TU MISION:
-                1. Responder preguntas sobre datos registrados en la base de SNC.
-                2. Brindar orientación metodológica de calidad cuando el usuario consulte sobre tratamiento o planes de acción.
+                REGLAS DE RESPUESTA:
+                - Responde de forma clara, directa y estructurada.
+                - Si te piden un TRATAMIENTO: indica la corrección inmediata recomendada y el manejo del evento.
+                - Si te piden PLAN DE ACCIÓN / MEJORA: sugiere metodología (5 Porqués / Causa Raíz) con Actividad, Responsable y Seguimiento.
                 
-                DIRECTRICES DE ASESORÍA DE CALIDAD:
-                - Si el usuario pregunta "¿Cómo debería tratar esta SNC?" o pide un tratamiento:
-                  * Define la acción inmediata o de corrección recomendada (ej: anular comprobante, reexpedir resultado, recontactar usuario).
-                  * Define la disposición o cierre del evento actual.
-                - Si el usuario pregunta por un "Plan de acción" o "Acción coyuntural/correctiva":
-                  * Recomienda un enfoque metodológico (Análisis de Causa Raíz / 5 Porqués).
-                  * Estructura la recomendación en 3 partes: Actividad concreta, Responsable sugerido y Mecanismo de seguimiento/verificación.
-                
-                DATOS CONSOLIDADOS DEL SISTEMA (FILTRADOS ACTUALMENTE):
-                - Total de eventos registrados: {len(df_f)}
-                - Efectividad de cierre: {tasa_cierre:.1f}%
-                - Casos pendientes por cerrar: {pendientes}
-                - Casos cerrados adecuadamente: {cerrados}
-                - Acciones coyunturales registradas: {coyunturales}
-                - Incidentes reportados: {incidentes}
-                {contexto_especifico if contexto_especifico else f'''
-                MUESTRA DE REGISTROS RECIENTES:
-                {df_f[['Servicio', col_proceso[0] if col_proceso else 'Servicio', col_desc[0] if col_desc else 'Servicio']].head(15).to_string()}
-                '''}
+                RESUMEN DE DATOS ACTUALES:
+                - Registros totales: {len(df_f)} | Efectividad cierre: {tasa_cierre:.1f}%
+                - Pendientes: {pendientes} | Cerrados: {cerrados} | Acciones coyunturales: {coyunturales} | Incidentes: {incidentes}
+                {contexto_especifico}
                 """
 
                 try:
@@ -571,17 +576,14 @@ if gemini_key:
                     )
 
                     with st.chat_message("assistant"):
-                        response = model.generate_content(prompt_completo)
-                        st.markdown(response.text)
+                        with st.spinner("Analizando información de SNC..."):
+                            response = model.generate_content(prompt_completo)
+                            st.markdown(response.text)
 
                     st.session_state.gemini_messages.append(
                         {"role": "assistant", "content": response.text}
                     )
                 except Exception as err:
                     st.error(f"Error al procesar la respuesta con la IA: {err}")
-    except Exception as e:
-        st.sidebar.error("API Key inválida o no configurada correctamente.")
-else:
-    st.sidebar.info(
-        "💡 Guarda la API Key en Secrets para activar el chat de manera automática."
-    )
+        except Exception as e:
+            st.error("API Key inválida o no configurada correctamente.")
