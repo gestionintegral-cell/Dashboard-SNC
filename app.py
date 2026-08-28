@@ -429,7 +429,6 @@ with t_tabla:
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🤖 Asistente Virtual SNC")
 
-# Intenta obtener la API Key automáticamente desde Secrets o pide una manual
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
 if not gemini_key:
@@ -441,18 +440,15 @@ if gemini_key:
     try:
         genai.configure(api_key=gemini_key)
 
-        # Desplegable nativo para el chat en el panel lateral
         with st.sidebar.expander("💬 Abrir Chat de Consultas", expanded=False):
 
             if "gemini_messages" not in st.session_state:
                 st.session_state.gemini_messages = []
 
-            # Mostrar historial acumulado
             for msg in st.session_state.gemini_messages:
                 with st.chat_message(msg["role"]):
                     st.markdown(msg["content"])
 
-            # Entrada del usuario
             if user_prompt := st.chat_input("Escribe tu pregunta..."):
                 st.session_state.gemini_messages.append(
                     {"role": "user", "content": user_prompt}
@@ -460,7 +456,6 @@ if gemini_key:
                 with st.chat_message("user"):
                     st.markdown(user_prompt)
 
-                # Construcción del contexto dinámico desde los datos filtrados del DataFrame
                 contexto_snc = f"""
                 Eres el asistente oficial de Gestión de Calidad de COLMEDICOS.
                 Responde únicamente con base en la información consolidada del sistema de Salidas No Conformes (SNC) provista a continuación:
@@ -478,9 +473,11 @@ if gemini_key:
                 """
 
                 try:
-                    # Uso del modelo de respuesta ultra rápida y gratuito Gemini 1.5 Flash
-                    model = genai.GenerativeModel("gemini-1.5-flash")
-                    prompt_completo = f"{contexto_snc}\n\nPregunta del usuario: {user_prompt}"
+                    # Se utiliza el identificador universal del modelo para evitar errores 404
+                    model = genai.GenerativeModel("gemini-pro")
+                    prompt_completo = (
+                        f"{contexto_snc}\n\nPregunta del usuario: {user_prompt}"
+                    )
 
                     with st.chat_message("assistant"):
                         response = model.generate_content(prompt_completo)
