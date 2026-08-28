@@ -473,8 +473,13 @@ if gemini_key:
                 """
 
                 try:
-                    # Se utiliza el identificador universal del modelo para evitar errores 404
-                    model = genai.GenerativeModel("gemini-pro")
+                    # Intento con modelos soportados según la API disponible
+                    model_name = "gemini-2.0-flash"
+                    try:
+                        model = genai.GenerativeModel(model_name)
+                    except Exception:
+                        model = genai.GenerativeModel("gemini-1.5-flash-8b")
+
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta del usuario: {user_prompt}"
                     )
