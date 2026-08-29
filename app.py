@@ -17,7 +17,7 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------
-# 2. FUNCIONES DE APOYO (HELPERS)
+# 2. FUNCIONES DE APOYO (HELPERS DE DATOS Y ESTILOS)
 # ---------------------------------------------------------
 def buscar_archivo_imagen(nombre_base):
     posibles_rutas = [
@@ -89,7 +89,7 @@ def es_afirmativo(val):
 
 
 # ---------------------------------------------------------
-# 3. ESTILOS CSS PERSONALIZADOS & BOTÓN CHAT FLOTANTE
+# 3. ESTILOS CSS PERSONALIZADOS Y BOTÓN CHAT FLOTANTE
 # ---------------------------------------------------------
 st.markdown(
     """
@@ -152,7 +152,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 4. LOGO EN LA BARRA LATERAL
+# 4. LOGO Y NAVEGACIÓN EN LA BARRA LATERAL
 # ---------------------------------------------------------
 ruta_logo = buscar_archivo_imagen("logo_colmedicos.png")
 if ruta_logo:
@@ -234,7 +234,7 @@ if not col_desc:
     ]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS EN SIDEBAR (SIN AUTO-SELECCIÓN)
+# 7. FILTROS DINÁMICOS ROBUSTOS
 # ---------------------------------------------------------
 sedes_disponibles = list(df[col_sede[0]].dropna().unique()) if col_sede else []
 servicios_disponibles = list(df["Servicio"].dropna().unique())
@@ -243,7 +243,6 @@ periodos_validos = sorted([str(p) for p in df["Periodo"].unique() if str(p) != "
 if "Sin Fecha" in df["Periodo"].values:
     periodos_validos.append("Sin Fecha")
 
-# Se utiliza default=[] para que la app inicie limpia sin auto-marcar todo
 sedes_seleccionadas = st.sidebar.multiselect(
     "Sede", sedes_disponibles, default=[]
 )
@@ -254,9 +253,12 @@ periodos_seleccionados = st.sidebar.multiselect(
     "📅 Período General (Año-Mes)", periodos_validos, default=[]
 )
 
+# Botón para limpiar filtros en la barra lateral
+if st.sidebar.button("🔄 Limpiar Filtros"):
+    st.rerun()
+
 df_f = df.copy()
 
-# Si el usuario NO selecciona nada, se asume que desea ver TODOS los datos de ese campo.
 if sedes_seleccionadas and col_sede:
     df_f = df_f[df_f[col_sede[0]].isin(sedes_seleccionadas)]
 if servicios_seleccionados:
@@ -264,7 +266,11 @@ if servicios_seleccionados:
 if periodos_seleccionados:
     df_f = df_f[df_f["Periodo"].astype(str).isin(periodos_seleccionados)]
 
-df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
+# CORRECCIÓN DEFENSIVA DEL ERROR EN IMAGEN:
+if not df_f.empty:
+    df_f["_search_text"] = df_f.astype(str).fillna("").apply(lambda r: " ".join(r), axis=1)
+else:
+    df_f["_search_text"] = pd.Series(dtype=str)
 
 # ---------------------------------------------------------
 # 8. BANNER INSTITUCIONAL
@@ -315,18 +321,18 @@ else:
 total_eventos = len(df_f)
 cerrados = (
     len(df_f[df_f[col_estado[0]].apply(es_estado_cerrado)])
-    if col_estado
+    if col_estado and not df_f.empty
     else 0
 )
 pendientes = total_eventos - cerrados
 coyunturales = (
     len(df_f[df_f[col_coyuntural[0]].apply(es_afirmativo)])
-    if col_coyuntural
+    if col_coyuntural and not df_f.empty
     else 0
 )
 incidentes = (
     len(df_f[df_f[col_incidente[0]].apply(es_afirmativo)])
-    if col_incidente
+    if col_incidente and not df_f.empty
     else 0
 )
 tasa_cierre = (cerrados / total_eventos * 100) if total_eventos > 0 else 0.0
@@ -360,6 +366,11 @@ with m5:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+# Mensaje de advertencia amigable si la selección de filtros da 0 resultados
+if df_f.empty:
+    st.warning("⚠️ No se encontraron registros de Salidas No Conformes para la combinación de filtros seleccionada. Por favor ajusta los filtros en la barra lateral.")
+    st.stop()
+
 # ---------------------------------------------------------
 # 10. SEGMENTACIÓN DE REGISTROS
 # ---------------------------------------------------------
@@ -389,18 +400,18 @@ else:
 st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 11. PESTAÑAS DE ANÁLISIS
+# 11. PESTAÑAS ESTRUCTURADAS DE ANÁLISIS Y NAVEGACIÓN
 # ---------------------------------------------------------
 t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     [
-        "Análisis por Proceso / Área",
-        "Evolución Temporal",
-        "Gestión por Personal",
-        "Consolidado de Registros",
+        "📊 Análisis por Proceso y Hallazgos",
+        "📈 Evolución Temporal",
+        "👥 Gestión por Colaborador",
+        "📋 Consolidado de Registros",
     ]
 )
 
-# PESTAÑA 1: PROCESOS Y HALLAZGOS CON FILTROS DINÁMICOS
+# PESTAÑA 1: PROCESOS / ÁREAS Y HALLAZGOS
 with t_procesos:
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
@@ -433,7 +444,7 @@ with t_procesos:
     col_left, col_right = st.columns(2)
 
     with col_left:
-        st.markdown(f"##### Incidencias por Área / Proceso ({mes_focal})")
+        st.markdown(f"##### Incidencias por Área / Proceso Específico")
         if col_proceso:
             df_p_data = df_proc_view[
                 (df_proc_view[col_proceso[0]].astype(str).str.strip() != "")
@@ -468,12 +479,12 @@ with t_procesos:
                 )
                 st.plotly_chart(fig_p, use_container_width=True)
             else:
-                st.info("No hay datos registrados para la selección actual.")
+                st.info("No hay datos registrados para el filtro seleccionado.")
         else:
             st.warning("No se encontró la columna de Proceso/Área.")
 
     with col_right:
-        st.markdown(f"##### Descripción de Hallazgos Recurrentes ({mes_focal})")
+        st.markdown(f"##### Descripción de Hallazgos Recurrentes")
         if col_desc:
             df_d_data = df_proc_view[
                 (df_proc_view[col_desc[0]].astype(str).str.strip() != "")
@@ -508,7 +519,7 @@ with t_procesos:
                 )
                 st.plotly_chart(fig_d, use_container_width=True)
             else:
-                st.info("No hay descripciones de hallazgos para la selección actual.")
+                st.info("No hay descripciones de hallazgos para el filtro seleccionado.")
         else:
             st.warning("No se encontró la columna de Descripción de SNC.")
 
@@ -649,13 +660,13 @@ with t_personas:
             else:
                 st.info("No hay registros para mostrar.")
 
-# PESTAÑA 4: TABLA
+# PESTAÑA 4: TABLA CONSOLIDADA
 with t_tabla:
-    st.markdown(f"##### Registros ({segmento})")
+    st.markdown(f"##### Registros Consolidados ({segmento})")
     df_export = df_v.drop(columns=["_search_text"], errors="ignore")
     csv = df_export.to_csv(index=False).encode("utf-8")
     st.download_button(
-        label="Exportar vista a CSV",
+        label="📥 Exportar vista a CSV",
         data=csv,
         file_name="snc_colmedicos.csv",
         mime="text/csv",
@@ -710,7 +721,7 @@ with st.popover("💬 Asistente IA SNC"):
 
                 coincidencias = pd.DataFrame()
 
-                if terminos_busqueda:
+                if terminos_busqueda and not df_f.empty:
                     pattern = "|".join(terminos_busqueda)
                     coincidencias = df_f[
                         df_f["_search_text"].str.contains(
@@ -719,7 +730,7 @@ with st.popover("💬 Asistente IA SNC"):
                     ]
 
                 resumen_colaboradores = ""
-                if col_colaborador:
+                if col_colaborador and not df_f.empty:
                     top_colab = (
                         df_f[col_colaborador[0]]
                         .value_counts()
@@ -731,10 +742,11 @@ with st.popover("💬 Asistente IA SNC"):
                         resumen_colaboradores += f"- {colab}: {cant}\n"
 
                 resumen_servicios = ""
-                top_serv = df_f["Servicio"].value_counts().head(3).to_dict()
-                resumen_servicios = "\nTOP SERVICIOS CON MÁS CASOS:\n"
-                for serv, cant in top_serv.items():
-                    resumen_servicios += f"- {serv}: {cant}\n"
+                if not df_f.empty:
+                    top_serv = df_f["Servicio"].value_counts().head(3).to_dict()
+                    resumen_servicios = "\nTOP SERVICIOS CON MÁS CASOS:\n"
+                    for serv, cant in top_serv.items():
+                        resumen_servicios += f"- {serv}: {cant}\n"
 
                 contexto_especifico = ""
                 if not coincidencias.empty:
