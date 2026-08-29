@@ -41,9 +41,7 @@ def get_base64_image(ruta_archivo):
 
 
 def es_estado_cerrado(val):
-    """
-    Identifica si el estado del registro es CERRADA o CERRADO.
-    """
+    """Identifica si el estado del registro es CERRADA o CERRADO."""
     if pd.isna(val):
         return False
 
@@ -190,7 +188,8 @@ def cargar_base_datos():
         df_total["Fecha_DT"] = pd.to_datetime(
             df_total[col_fecha[0]], errors="coerce"
         )
-        df_total["Periodo"] = df_total["Fecha_DT"].dt.to_period("M")
+        df_total["Periodo"] = df_total["Fecha_DT"].dt.to_period("M").astype(str)
+        df_total["Periodo"] = df_total["Periodo"].replace("NaT", "Sin Fecha")
 
     return df_total
 
@@ -225,10 +224,16 @@ if not col_desc:
     ]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS GLOBAL DE LA SIDEBAR
+# 7. FILTROS DINÁMICOS GLOBALES DE LA SIDEBAR (CON FILTRO TEMPORAL)
 # ---------------------------------------------------------
 sedes_disponibles = list(df[col_sede[0]].dropna().unique()) if col_sede else []
 servicios_disponibles = list(df["Servicio"].dropna().unique())
+periodos_disponibles = sorted(
+    [p for p in df["Periodo"].dropna().unique() if p != "Sin Fecha"],
+    reverse=True,
+)
+if "Sin Fecha" in df["Periodo"].values:
+    periodos_disponibles.append("Sin Fecha")
 
 sedes_seleccionadas = st.sidebar.multiselect(
     "Sede", sedes_disponibles, default=sedes_disponibles
@@ -236,12 +241,17 @@ sedes_seleccionadas = st.sidebar.multiselect(
 servicios_seleccionados = st.sidebar.multiselect(
     "Servicio / Área", servicios_disponibles, default=servicios_disponibles
 )
+periodos_seleccionados = st.sidebar.multiselect(
+    "📅 Período (Mes/Año)", periodos_disponibles, default=periodos_disponibles
+)
 
 df_f = df.copy()
 if sedes_seleccionadas and col_sede:
     df_f = df_f[df_f[col_sede[0]].isin(sedes_seleccionadas)]
 if servicios_seleccionados:
     df_f = df_f[df_f["Servicio"].isin(servicios_seleccionados)]
+if periodos_seleccionados:
+    df_f = df_f[df_f["Periodo"].isin(periodos_seleccionados)]
 
 # Índice de búsqueda ultrarrápido
 df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
@@ -477,26 +487,23 @@ with t_procesos:
         st.plotly_chart(fig_m, use_container_width=True)
 
 with t_tiempo:
-    st.markdown("##### Comportamiento Mensual de Registros")
+    st.markdown("##### Comportamiento Mensual de Registros por Servicio")
     if "Periodo" in df_v.columns and not df_v["Periodo"].dropna().empty:
-        df_t = df_v.groupby("Periodo").size().reset_index(name="Frecuencia")
-        df_t["Periodo"] = df_t["Periodo"].astype(str)
+        df_t = df_v.groupby(["Periodo", "Servicio"]).size().reset_index(name="Frecuencia")
+        
         fig_t = px.line(
             df_t,
             x="Periodo",
             y="Frecuencia",
+            color="Servicio",
             markers=True,
             line_shape="linear",
         )
-        fig_t.update_traces(line_color="#1A2B6D", line_width=3)
         fig_t.update_layout(margin=dict(l=0, r=0, t=20, b=20))
         st.plotly_chart(fig_t, use_container_width=True)
     else:
         st.info("No hay suficientes datos temporales cargados.")
 
-# ---------------------------------------------------------
-# PESTAÑA: GESTIÓN POR PERSONAL (AJUSTADA Y CORREGIDA)
-# ---------------------------------------------------------
 with t_personas:
     opciones_servicio_personal = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
     servicio_personal_sel = st.selectbox(
@@ -505,7 +512,6 @@ with t_personas:
         key="sb_gestion_personal"
     )
 
-    # Filtrar el DataFrame según el servicio elegido para AMBAS columnas
     df_personal_view = (
         df_v[df_v["Servicio"] == servicio_personal_sel]
         if servicio_personal_sel != "Todos los servicios"
@@ -514,7 +520,6 @@ with t_personas:
 
     p_col1, p_col2 = st.columns(2)
 
-    # Columna 1: Tabla de Colaboradores del servicio seleccionado
     with p_col1:
         st.markdown("##### Eventos por Colaborador")
         if col_colaborador:
@@ -537,7 +542,6 @@ with t_personas:
         else:
             st.warning("No se encontró la columna de Colaboradores.")
 
-    # Columna 2: Gráfica según el filtro (Por Colaborador o Por Servicio)
     with p_col2:
         if servicio_personal_sel != "Todos los servicios":
             st.markdown(f"##### Distribución por Colaborador ({servicio_personal_sel})")
@@ -706,7 +710,6 @@ with st.popover("💬 Asistente IA SNC"):
                 """
 
                 try:
-                    # Modelo estándar activo y de respuesta ultrarrápida
                     model = genai.GenerativeModel("gemini-3.6-flash")
                     prompt_completo = (
                         f"{contexto_snc}\n\nPregunta: {user_prompt}"
