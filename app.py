@@ -422,6 +422,10 @@ with t_procesos:
     )
 
     col_left, col_right = st.columns(2)
+
+    # ---------------------------------------------------------
+    # GRÁFICO 1: INCIDENCIAS POR PROCESO / ÁREA (Limpio y legible)
+    # ---------------------------------------------------------
     with col_left:
         st.markdown("##### Incidencias por Área / Proceso Específico")
         if col_proceso:
@@ -432,30 +436,33 @@ with t_procesos:
             ].copy()
 
             if not df_p_data.empty:
+                # Conteo total por proceso ordenado de mayor a menor
                 df_p = (
-                    df_p_data.groupby([col_proceso[0], "Periodo"])
-                    .size()
-                    .reset_index(name="Eventos")
+                    df_p_data[col_proceso[0]]
+                    .value_counts()
+                    .reset_index()
+                    .head(10)
                 )
-                top_procesos = (
-                    df_p_data[col_proceso[0]].value_counts().head(10).index
-                )
-                df_p = df_p[df_p[col_proceso[0]].isin(top_procesos)]
-                df_p.rename(columns={col_proceso[0]: "Proceso / Área"}, inplace=True)
+                df_p.columns = ["Proceso / Área", "Eventos"]
 
                 fig_p = px.bar(
                     df_p,
                     x="Eventos",
                     y="Proceso / Área",
-                    color="Periodo",
                     orientation="h",
                     text="Eventos",
-                    color_discrete_sequence=px.colors.qualitative.Set2,
+                    color="Eventos",
+                    color_continuous_scale=["#B3C5E7", "#1A2B6D"],
+                )
+                fig_p.update_traces(
+                    textposition="outside",
+                    cliponaxis=False
                 )
                 fig_p.update_layout(
-                    yaxis={"autorange": "reversed"},
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    legend_title_text="Período"
+                    yaxis={"autorange": "reversed", "title": ""},
+                    xaxis={"title": "Total de Eventos"},
+                    margin=dict(l=20, r=40, t=20, b=20),
+                    coloraxis_showscale=False
                 )
                 st.plotly_chart(fig_p, use_container_width=True)
             else:
@@ -463,6 +470,9 @@ with t_procesos:
         else:
             st.warning("No se encontró la columna de Proceso/Área.")
 
+    # ---------------------------------------------------------
+    # GRÁFICO 2: HALLAZGOS RECURRENTES (Limpio y directo)
+    # ---------------------------------------------------------
     with col_right:
         st.markdown("##### Descripción de Hallazgos Recurrentes")
         if col_desc:
@@ -473,28 +483,33 @@ with t_procesos:
             ].copy()
 
             if not df_d_data.empty:
-                top_descs = df_d_data[col_desc[0]].value_counts().head(8).index
+                # Conteo total de hallazgos sin apilamientos confusos
                 df_d = (
-                    df_d_data[df_d_data[col_desc[0]].isin(top_descs)]
-                    .groupby([col_desc[0], "Periodo"])
-                    .size()
-                    .reset_index(name="Frecuencia")
+                    df_d_data[col_desc[0]]
+                    .value_counts()
+                    .reset_index()
+                    .head(8)
                 )
-                df_d.rename(columns={col_desc[0]: "Descripción"}, inplace=True)
+                df_d.columns = ["Descripción", "Frecuencia"]
 
                 fig_d = px.bar(
                     df_d,
                     x="Frecuencia",
                     y="Descripción",
-                    color="Periodo",
                     orientation="h",
                     text="Frecuencia",
-                    color_discrete_sequence=px.colors.qualitative.Pastel,
+                    color="Frecuencia",
+                    color_continuous_scale=["#FFE4C4", "#F58220"],
+                )
+                fig_d.update_traces(
+                    textposition="outside",
+                    cliponaxis=False
                 )
                 fig_d.update_layout(
-                    yaxis={"autorange": "reversed"},
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    legend_title_text="Período"
+                    yaxis={"autorange": "reversed", "title": ""},
+                    xaxis={"title": "Frecuencia Total"},
+                    margin=dict(l=20, r=40, t=20, b=20),
+                    coloraxis_showscale=False
                 )
                 st.plotly_chart(fig_d, use_container_width=True)
             else:
@@ -502,44 +517,40 @@ with t_procesos:
         else:
             st.warning("No se encontró la columna de Descripción de SNC.")
 
-    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-    if col_momento:
-        st.markdown("##### Detección del Evento por Etapa del Servicio")
-        fig_m = px.histogram(
-            df_proc_view,
-            x="Servicio",
-            color=col_momento[0],
-            barmode="group",
-            color_discrete_sequence=px.colors.qualitative.Set2,
-        )
-        fig_m.update_layout(margin=dict(l=0, r=0, t=20, b=20))
-        st.plotly_chart(fig_m, use_container_width=True)
+    # ---------------------------------------------------------
+    # SECCIÓN INFERIOR: EVOLUCIÓN MENSUAL DEL SERVICIO SELECCIONADO
+    # ---------------------------------------------------------
+    st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
+    st.markdown("##### 📈 Comportamiento Mensual de las Salidas No Conformes")
 
-with t_tiempo:
-    st.markdown("##### Comportamiento Mensual de Registros por Servicio")
-    if "Periodo" in df_v.columns and not df_v[df_v["Periodo"] != "Sin Fecha"].empty:
-        df_t = (
-            df_v[df_v["Periodo"] != "Sin Fecha"]
-            .groupby(["Periodo", "Servicio"])
+    if "Periodo" in df_proc_view.columns and not df_proc_view[df_proc_view["Periodo"] != "Sin Fecha"].empty:
+        df_time_focal = (
+            df_proc_view[df_proc_view["Periodo"] != "Sin Fecha"]
+            .groupby(["Periodo", col_desc[0] if col_desc else "Servicio"])
             .size()
-            .reset_index(name="Frecuencia")
+            .reset_index(name="Cantidad")
         )
-        fig_t = px.line(
-            df_t,
+        
+        # Gráfica de evolución temporal por hallazgo/servicio
+        fig_tf = px.bar(
+            df_time_focal,
             x="Periodo",
-            y="Frecuencia",
-            color="Servicio",
-            markers=True,
-            line_shape="linear",
+            y="Cantidad",
+            color=col_desc[0] if col_desc else "Servicio",
+            barmode="group",
+            text="Cantidad",
+            color_discrete_sequence=px.colors.qualitative.Safe,
         )
-        fig_t.update_layout(
-            margin=dict(l=0, r=0, t=20, b=20),
-            xaxis_title="Período (Mes)",
-            yaxis_title="Cantidad de SNC"
+        fig_tf.update_traces(textposition="outside")
+        fig_tf.update_layout(
+            xaxis_title="Mes / Período",
+            yaxis_title="Cantidad de Casos",
+            legend_title_text="Causa / Hallazgo",
+            margin=dict(l=20, r=20, t=20, b=20)
         )
-        st.plotly_chart(fig_t, use_container_width=True)
+        st.plotly_chart(fig_tf, use_container_width=True)
     else:
-        st.info("No hay suficientes datos temporales cargados para el filtro actual.")
+        st.info("No hay suficientes registros con fecha en la selección actual.")
 
 # ---------------------------------------------------------
 # PESTAÑA: GESTIÓN POR PERSONAL
