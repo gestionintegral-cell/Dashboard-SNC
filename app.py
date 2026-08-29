@@ -41,7 +41,7 @@ def get_base64_image(ruta_archivo):
 
 
 def parse_smart_dates(series):
-    """Parsea inteligentemente fechas mixtas en formato YYYY-MM-DD."""
+    """Parsea inteligentemente fechas mixtas en formato YYYY-MM-DD o DD-MM-YYYY."""
     s_dt = pd.to_datetime(series, errors="coerce")
     mask_nat = s_dt.isna() & series.notna()
     if mask_nat.any():
@@ -52,7 +52,7 @@ def parse_smart_dates(series):
             .str.replace("—", "-")
             .str.strip()
         )
-        s_dt[mask_nat] = pd.to_datetime(cleaned_str, dayfirst=False, errors="coerce")
+        s_dt[mask_nat] = pd.to_datetime(cleaned_str, dayfirst=True, errors="coerce")
     return s_dt
 
 
@@ -234,12 +234,12 @@ if not col_desc:
     ]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS EN SIDEBAR (INCLUYE PERÍODO)
+# 7. FILTROS DINÁMICOS EN SIDEBAR
 # ---------------------------------------------------------
 sedes_disponibles = list(df[col_sede[0]].dropna().unique()) if col_sede else []
 servicios_disponibles = list(df["Servicio"].dropna().unique())
 
-periodos_validos = sorted([p for p in df["Periodo"].unique() if p != "Sin Fecha"], reverse=False)
+periodos_validos = sorted([str(p) for p in df["Periodo"].unique() if str(p) != "Sin Fecha"])
 if "Sin Fecha" in df["Periodo"].values:
     periodos_validos.append("Sin Fecha")
 
@@ -250,7 +250,7 @@ servicios_seleccionados = st.sidebar.multiselect(
     "Servicio / Área", servicios_disponibles, default=servicios_disponibles
 )
 periodos_seleccionados = st.sidebar.multiselect(
-    "📅 Período (Año-Mes)", periodos_validos, default=periodos_validos
+    "📅 Período General (Año-Mes)", periodos_validos, default=periodos_validos
 )
 
 df_f = df.copy()
@@ -397,26 +397,34 @@ t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     ]
 )
 
-# PESTAÑA 1: PROCESOS / ÁREAS Y HALLAZGOS (LIMPIO Y SIN APILAMIENTOS)
+# PESTAÑA 1: PROCESOS / ÁREAS Y HALLAZGOS CON FILTRO DE MES ESPECÍFICO
 with t_procesos:
-    st.markdown("##### Selección de servicio a detallar")
-    servicios_proceso_opt = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
-    servicio_focal = st.selectbox(
-        "Filtrar análisis por servicio:",
-        options=servicios_proceso_opt,
-        key="sb_analisis_proceso"
-    )
+    col_sel1, col_sel2 = st.columns(2)
+    with col_sel1:
+        servicios_proceso_opt = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
+        servicio_focal = st.selectbox(
+            "Filtrar análisis por servicio:",
+            options=servicios_proceso_opt,
+            key="sb_analisis_proceso"
+        )
+    with col_sel2:
+        meses_proceso_opt = ["Todos los meses del período"] + sorted(list(df_v["Periodo"].unique()))
+        mes_focal = st.selectbox(
+            "Filtrar mes específico para este análisis:",
+            options=meses_proceso_opt,
+            key="sb_analisis_mes"
+        )
 
-    df_proc_view = (
-        df_v[df_v["Servicio"] == servicio_focal]
-        if servicio_focal != "Todos los servicios"
-        else df_v.copy()
-    )
+    df_proc_view = df_v.copy()
+    if servicio_focal != "Todos los servicios":
+        df_proc_view = df_proc_view[df_proc_view["Servicio"] == servicio_focal]
+    if mes_focal != "Todos los meses del período":
+        df_proc_view = df_proc_view[df_proc_view["Periodo"] == mes_focal]
 
     col_left, col_right = st.columns(2)
 
     with col_left:
-        st.markdown("##### Incidencias por Área / Proceso Específico")
+        st.markdown(f"##### Incidencias por Área / Proceso ({mes_focal})")
         if col_proceso:
             df_p_data = df_proc_view[
                 (df_proc_view[col_proceso[0]].astype(str).str.strip() != "")
@@ -445,18 +453,18 @@ with t_procesos:
                 fig_p.update_traces(textposition="outside", cliponaxis=False)
                 fig_p.update_layout(
                     yaxis={"autorange": "reversed", "title": ""},
-                    xaxis={"title": "Total de Eventos"},
+                    xaxis={"title": "Cantidad de Eventos"},
                     margin=dict(l=20, r=40, t=20, b=20),
                     coloraxis_showscale=False
                 )
                 st.plotly_chart(fig_p, use_container_width=True)
             else:
-                st.info("No hay datos registrados para este proceso.")
+                st.info("No hay datos registrados para la selección actual.")
         else:
             st.warning("No se encontró la columna de Proceso/Área.")
 
     with col_right:
-        st.markdown("##### Descripción de Hallazgos Recurrentes")
+        st.markdown(f"##### Descripción de Hallazgos Recurrentes ({mes_focal})")
         if col_desc:
             df_d_data = df_proc_view[
                 (df_proc_view[col_desc[0]].astype(str).str.strip() != "")
@@ -485,7 +493,7 @@ with t_procesos:
                 fig_d.update_traces(textposition="outside", cliponaxis=False)
                 fig_d.update_layout(
                     yaxis={"autorange": "reversed", "title": ""},
-                    xaxis={"title": "Frecuencia Total"},
+                    xaxis={"title": "Frecuencia"},
                     margin=dict(l=20, r=40, t=20, b=20),
                     coloraxis_showscale=False
                 )
@@ -508,7 +516,7 @@ with t_procesos:
         fig_m.update_layout(margin=dict(l=0, r=0, t=20, b=20))
         st.plotly_chart(fig_m, use_container_width=True)
 
-# PESTAÑA 2: EVOLUCIÓN TEMPORAL
+# PESTAÑA 2: EVOLUCIÓN TEMPORAL COMPLETA
 with t_tiempo:
     st.markdown("##### Comportamiento Mensual de Registros por Servicio")
     
