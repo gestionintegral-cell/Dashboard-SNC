@@ -253,7 +253,6 @@ periodos_seleccionados = st.sidebar.multiselect(
     "📅 Período General (Año-Mes)", periodos_validos, default=[]
 )
 
-# Botón para limpiar filtros en la barra lateral
 if st.sidebar.button("🔄 Limpiar Filtros"):
     st.rerun()
 
@@ -266,7 +265,6 @@ if servicios_seleccionados:
 if periodos_seleccionados:
     df_f = df_f[df_f["Periodo"].astype(str).isin(periodos_seleccionados)]
 
-# CORRECCIÓN DEFENSIVA DEL ERROR EN IMAGEN:
 if not df_f.empty:
     df_f["_search_text"] = df_f.astype(str).fillna("").apply(lambda r: " ".join(r), axis=1)
 else:
@@ -366,7 +364,6 @@ with m5:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Mensaje de advertencia amigable si la selección de filtros da 0 resultados
 if df_f.empty:
     st.warning("⚠️ No se encontraron registros de Salidas No Conformes para la combinación de filtros seleccionada. Por favor ajusta los filtros en la barra lateral.")
     st.stop()
@@ -400,7 +397,7 @@ else:
 st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 11. PESTAÑAS ESTRUCTURADAS DE ANÁLISIS Y NAVEGACIÓN
+# 11. PESTAÑAS ESTRUCTURADAS DE ANÁLISIS
 # ---------------------------------------------------------
 t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     [
@@ -411,40 +408,25 @@ t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     ]
 )
 
-# PESTAÑA 1: PROCESOS / ÁREAS Y HALLAZGOS
+# PESTAÑA 1: PROCESOS / ÁREAS Y HALLAZGOS CON DESGLOSE DE FECHAS (COLORES POR PERÍODO)
 with t_procesos:
-    col_sel1, col_sel2 = st.columns(2)
-    with col_sel1:
-        servicios_proceso_opt = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
-        servicio_focal = st.selectbox(
-            "Filtrar análisis por servicio:",
-            options=servicios_proceso_opt,
-            key="sb_analisis_proceso"
-        )
+    servicios_proceso_opt = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
+    servicio_focal = st.selectbox(
+        "Filtrar análisis por servicio:",
+        options=servicios_proceso_opt,
+        key="sb_analisis_proceso"
+    )
 
-    df_base_servicio = (
+    df_proc_view = (
         df_v[df_v["Servicio"] == servicio_focal]
         if servicio_focal != "Todos los servicios"
         else df_v.copy()
     )
 
-    with col_sel2:
-        meses_disponibles_servicio = sorted(list(df_base_servicio["Periodo"].unique()))
-        meses_proceso_opt = ["Todos los meses del período"] + meses_disponibles_servicio
-        mes_focal = st.selectbox(
-            "Filtrar mes específico para este servicio:",
-            options=meses_proceso_opt,
-            key="sb_analisis_mes"
-        )
-
-    df_proc_view = df_base_servicio.copy()
-    if mes_focal != "Todos los meses del período":
-        df_proc_view = df_proc_view[df_proc_view["Periodo"] == mes_focal]
-
     col_left, col_right = st.columns(2)
 
     with col_left:
-        st.markdown(f"##### Incidencias por Área / Proceso Específico")
+        st.markdown("##### Incidencias por Área / Proceso Específico (Desglosado por Mes)")
         if col_proceso:
             df_p_data = df_proc_view[
                 (df_proc_view[col_proceso[0]].astype(str).str.strip() != "")
@@ -453,38 +435,38 @@ with t_procesos:
             ].copy()
 
             if not df_p_data.empty:
+                # Agrupamos por Proceso Y Período para mantener el desglose de fechas por color
                 df_p = (
-                    df_p_data[col_proceso[0]]
-                    .value_counts()
-                    .reset_index()
-                    .head(10)
+                    df_p_data.groupby([col_proceso[0], "Periodo"])
+                    .size()
+                    .reset_index(name="Eventos")
                 )
-                df_p.columns = ["Proceso / Área", "Eventos"]
+                df_p.rename(columns={col_proceso[0]: "Proceso / Área"}, inplace=True)
 
                 fig_p = px.bar(
                     df_p,
                     x="Eventos",
                     y="Proceso / Área",
+                    color="Periodo",
                     orientation="h",
                     text="Eventos",
-                    color="Eventos",
-                    color_continuous_scale=["#B3C5E7", "#1A2B6D"],
+                    color_discrete_sequence=px.colors.qualitative.Set2,
                 )
-                fig_p.update_traces(textposition="outside", cliponaxis=False)
+                fig_p.update_traces(textposition="inside")
                 fig_p.update_layout(
                     yaxis={"autorange": "reversed", "title": ""},
                     xaxis={"title": "Cantidad de Eventos"},
-                    margin=dict(l=20, r=40, t=20, b=20),
-                    coloraxis_showscale=False
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    legend_title_text="Período (Mes)"
                 )
                 st.plotly_chart(fig_p, use_container_width=True)
             else:
-                st.info("No hay datos registrados para el filtro seleccionado.")
+                st.info("No hay datos registrados para la selección actual.")
         else:
             st.warning("No se encontró la columna de Proceso/Área.")
 
     with col_right:
-        st.markdown(f"##### Descripción de Hallazgos Recurrentes")
+        st.markdown("##### Descripción de Hallazgos Recurrentes (Desglosado por Mes)")
         if col_desc:
             df_d_data = df_proc_view[
                 (df_proc_view[col_desc[0]].astype(str).str.strip() != "")
@@ -493,33 +475,35 @@ with t_procesos:
             ].copy()
 
             if not df_d_data.empty:
+                # Agrupamos por Descripción Y Período para mostrar exactamente en qué mes ocurrieron
+                top_descs = df_d_data[col_desc[0]].value_counts().head(8).index
                 df_d = (
-                    df_d_data[col_desc[0]]
-                    .value_counts()
-                    .reset_index()
-                    .head(8)
+                    df_d_data[df_d_data[col_desc[0]].isin(top_descs)]
+                    .groupby([col_desc[0], "Periodo"])
+                    .size()
+                    .reset_index(name="Frecuencia")
                 )
-                df_d.columns = ["Descripción", "Frecuencia"]
+                df_d.rename(columns={col_desc[0]: "Descripción"}, inplace=True)
 
                 fig_d = px.bar(
                     df_d,
                     x="Frecuencia",
                     y="Descripción",
+                    color="Periodo",
                     orientation="h",
                     text="Frecuencia",
-                    color="Frecuencia",
-                    color_continuous_scale=["#FFE4C4", "#F58220"],
+                    color_discrete_sequence=px.colors.qualitative.Pastel,
                 )
-                fig_d.update_traces(textposition="outside", cliponaxis=False)
+                fig_d.update_traces(textposition="inside")
                 fig_d.update_layout(
                     yaxis={"autorange": "reversed", "title": ""},
                     xaxis={"title": "Frecuencia"},
-                    margin=dict(l=20, r=40, t=20, b=20),
-                    coloraxis_showscale=False
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    legend_title_text="Período (Mes)"
                 )
                 st.plotly_chart(fig_d, use_container_width=True)
             else:
-                st.info("No hay descripciones de hallazgos para el filtro seleccionado.")
+                st.info("No hay descripciones de hallazgos para la selección actual.")
         else:
             st.warning("No se encontró la columna de Descripción de SNC.")
 
@@ -536,7 +520,7 @@ with t_procesos:
         fig_m.update_layout(margin=dict(l=0, r=0, t=20, b=20))
         st.plotly_chart(fig_m, use_container_width=True)
 
-# PESTAÑA 2: EVOLUCIÓN TEMPORAL
+# PESTAÑA 2: EVOLUCIÓN TEMPORAL COMPLETA
 with t_tiempo:
     st.markdown("##### Comportamiento Mensual de Registros por Servicio")
     
