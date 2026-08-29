@@ -40,11 +40,25 @@ def get_base64_image(ruta_archivo):
     return ""
 
 
+def parse_smart_dates(series):
+    """Parsea inteligentemente fechas mixtas (texto, Excel datetime, guiones especiales)."""
+    s_dt = pd.to_datetime(series, errors="coerce")
+    mask_nat = s_dt.isna() & series.notna()
+    if mask_nat.any():
+        cleaned_str = (
+            series[mask_nat]
+            .astype(str)
+            .str.replace("–", "-")
+            .str.replace("—", "-")
+            .str.strip()
+        )
+        s_dt[mask_nat] = pd.to_datetime(cleaned_str, dayfirst=True, errors="coerce")
+    return s_dt
+
+
 def es_estado_cerrado(val):
-    """Identifica si el estado del registro es CERRADA o CERRADO."""
     if pd.isna(val):
         return False
-
     val_str = (
         str(val)
         .strip()
@@ -55,12 +69,10 @@ def es_estado_cerrado(val):
         .replace("Ó", "O")
         .replace("Ú", "U")
     )
-
     return val_str in ["CERRADA", "CERRADO", "SI", "TRUE", "1"] or "CERRAD" in val_str
 
 
 def es_afirmativo(val):
-    """Normaliza y valida banderas auxiliares (Acción coyuntural, Incidente, etc.)."""
     if pd.isna(val):
         return False
     val_str = (
@@ -82,7 +94,6 @@ def es_afirmativo(val):
 st.markdown(
     """
     <style>
-    /* Tarjetas de métricas */
     .metric-card {
         background-color: #FFFFFF;
         border-left: 4px solid #1A2B6D;
@@ -107,7 +118,6 @@ st.markdown(
         margin-top: 2px;
     }
 
-    /* Fijar contenedor del Popover flotante a la derecha abajo */
     div[data-testid="stPopover"] {
         position: fixed !important;
         bottom: 30px !important;
@@ -116,7 +126,6 @@ st.markdown(
         z-index: 999999 !important;
     }
 
-    /* Estilo del botón flotante */
     div[data-testid="stPopover"] > button {
         width: auto !important;
         min-width: 180px !important;
@@ -168,6 +177,8 @@ def cargar_base_datos():
     registros = []
 
     for hoja in xls.sheet_names:
+        if "matriz" in hoja.lower():
+            continue
         df_hoja = pd.read_excel(xls, sheet_name=hoja)
         df_hoja.columns = [str(col).strip() for col in df_hoja.columns]
         df_hoja["Servicio"] = hoja
@@ -175,21 +186,21 @@ def cargar_base_datos():
 
     df_total = pd.concat(registros, ignore_index=True)
 
-    for col in df_total.columns:
-        if df_total[col].dtype == "object":
-            df_total[col] = df_total[col].astype(str)
-
     col_fecha = [
         c
         for c in df_total.columns
         if "fecha" in c.lower() and "identificaci" in c.lower()
     ]
     if col_fecha:
-        df_total["Fecha_DT"] = pd.to_datetime(
-            df_total[col_fecha[0]], errors="coerce"
-        )
-        df_total["Periodo"] = df_total["Fecha_DT"].dt.to_period("M").astype(str)
-        df_total["Periodo"] = df_total["Periodo"].replace("NaT", "Sin Fecha")
+        df_total["Fecha_DT"] = parse_smart_dates(df_total[col_fecha[0]])
+        df_total["Periodo"] = df_total["Fecha_DT"].dt.strftime("%Y-%m")
+        df_total["Periodo"] = df_total["Periodo"].fillna("Sin Fecha")
+    else:
+        df_total["Periodo"] = "Sin Fecha"
+
+    for col in df_total.columns:
+        if df_total[col].dtype == "object":
+            df_total[col] = df_total[col].astype(str)
 
     return df_total
 
@@ -197,7 +208,7 @@ def cargar_base_datos():
 try:
     df = cargar_base_datos()
 except Exception as e:
-    st.error(f"No fue posible conectar con la base de datos de Google Sheets: {e}")
+    st.error(f"No fue posible conectar con la base de datos: {e}")
     st.stop()
 
 # ---------------------------------------------------------
@@ -224,16 +235,14 @@ if not col_desc:
     ]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS GLOBALES DE LA SIDEBAR (CON FILTRO TEMPORAL)
+# 7. FILTROS DINÁMICOS GLOBALES DE LA SIDEBAR (CON TIEMPO)
 # ---------------------------------------------------------
 sedes_disponibles = list(df[col_sede[0]].dropna().unique()) if col_sede else []
 servicios_disponibles = list(df["Servicio"].dropna().unique())
-periodos_disponibles = sorted(
-    [p for p in df["Periodo"].dropna().unique() if p != "Sin Fecha"],
-    reverse=True,
-)
+
+periodos_validos = sorted([p for p in df["Periodo"].unique() if p != "Sin Fecha"], reverse=True)
 if "Sin Fecha" in df["Periodo"].values:
-    periodos_disponibles.append("Sin Fecha")
+    periodos_validos.append("Sin Fecha")
 
 sedes_seleccionadas = st.sidebar.multiselect(
     "Sede", sedes_disponibles, default=sedes_disponibles
@@ -242,7 +251,7 @@ servicios_seleccionados = st.sidebar.multiselect(
     "Servicio / Área", servicios_disponibles, default=servicios_disponibles
 )
 periodos_seleccionados = st.sidebar.multiselect(
-    "📅 Período (Mes/Año)", periodos_disponibles, default=periodos_disponibles
+    "📅 Período (Mes/Año)", periodos_validos, default=periodos_validos
 )
 
 df_f = df.copy()
@@ -253,7 +262,6 @@ if servicios_seleccionados:
 if periodos_seleccionados:
     df_f = df_f[df_f["Periodo"].isin(periodos_seleccionados)]
 
-# Índice de búsqueda ultrarrápido
 df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
 
 # ---------------------------------------------------------
@@ -409,32 +417,38 @@ with t_procesos:
     with col_left:
         st.markdown("##### Incidencias por Área / Proceso Específico")
         if col_proceso:
-            df_p_data = df_proc_view[df_proc_view[col_proceso[0]].astype(str).str.strip() != ""].copy()
-            df_p_data = df_p_data[df_p_data[col_proceso[0]].notna() & (df_p_data[col_proceso[0]] != "nan")]
+            df_p_data = df_proc_view[
+                (df_proc_view[col_proceso[0]].astype(str).str.strip() != "")
+                & (df_proc_view[col_proceso[0]].notna())
+                & (df_proc_view[col_proceso[0]].astype(str) != "nan")
+            ].copy()
 
-            df_p = (
-                df_p_data[col_proceso[0]]
-                .value_counts()
-                .reset_index()
-                .head(10)
-            )
-            df_p.columns = ["Proceso / Área", "Eventos"]
+            if not df_p_data.empty:
+                # Agrupación desglosada por Proceso y por Período
+                df_p = (
+                    df_p_data.groupby([col_proceso[0], "Periodo"])
+                    .size()
+                    .reset_index(name="Eventos")
+                )
+                top_procesos = (
+                    df_p_data[col_proceso[0]].value_counts().head(10).index
+                )
+                df_p = df_p[df_p[col_proceso[0]].isin(top_procesos)]
+                df_p.rename(columns={col_proceso[0]: "Proceso / Área"}, inplace=True)
 
-            if not df_p.empty:
                 fig_p = px.bar(
                     df_p,
                     x="Eventos",
                     y="Proceso / Área",
+                    color="Periodo",
                     orientation="h",
                     text="Eventos",
-                    color="Eventos",
-                    color_continuous_scale=["#B3C5E7", "#1A2B6D"],
+                    color_discrete_sequence=px.colors.qualitative.Set2,
                 )
-                fig_p.update_traces(textposition="outside")
                 fig_p.update_layout(
                     yaxis={"autorange": "reversed"},
                     margin=dict(l=20, r=20, t=20, b=20),
-                    showlegend=False
+                    legend_title_text="Período"
                 )
                 st.plotly_chart(fig_p, use_container_width=True)
             else:
@@ -445,27 +459,35 @@ with t_procesos:
     with col_right:
         st.markdown("##### Descripción de Hallazgos Recurrentes")
         if col_desc:
-            df_d_data = df_proc_view[df_proc_view[col_desc[0]].astype(str).str.strip() != ""].copy()
-            df_d_data = df_d_data[df_d_data[col_desc[0]].notna() & (df_d_data[col_desc[0]] != "nan")]
+            df_d_data = df_proc_view[
+                (df_proc_view[col_desc[0]].astype(str).str.strip() != "")
+                & (df_proc_view[col_desc[0]].notna())
+                & (df_proc_view[col_desc[0]].astype(str) != "nan")
+            ].copy()
 
-            df_d = df_d_data[col_desc[0]].value_counts().reset_index().head(8)
-            df_d.columns = ["Descripción", "Frecuencia"]
+            if not df_d_data.empty:
+                top_descs = df_d_data[col_desc[0]].value_counts().head(8).index
+                df_d = (
+                    df_d_data[df_d_data[col_desc[0]].isin(top_descs)]
+                    .groupby([col_desc[0], "Periodo"])
+                    .size()
+                    .reset_index(name="Frecuencia")
+                )
+                df_d.rename(columns={col_desc[0]: "Descripción"}, inplace=True)
 
-            if not df_d.empty:
                 fig_d = px.bar(
                     df_d,
                     x="Frecuencia",
                     y="Descripción",
+                    color="Periodo",
                     orientation="h",
                     text="Frecuencia",
-                    color="Frecuencia",
-                    color_continuous_scale=["#FFE4C4", "#F58220"],
+                    color_discrete_sequence=px.colors.qualitative.Pastel,
                 )
-                fig_d.update_traces(textposition="outside")
                 fig_d.update_layout(
                     yaxis={"autorange": "reversed"},
                     margin=dict(l=20, r=20, t=20, b=20),
-                    showlegend=False
+                    legend_title_text="Período"
                 )
                 st.plotly_chart(fig_d, use_container_width=True)
             else:
@@ -488,9 +510,13 @@ with t_procesos:
 
 with t_tiempo:
     st.markdown("##### Comportamiento Mensual de Registros por Servicio")
-    if "Periodo" in df_v.columns and not df_v["Periodo"].dropna().empty:
-        df_t = df_v.groupby(["Periodo", "Servicio"]).size().reset_index(name="Frecuencia")
-        
+    if "Periodo" in df_v.columns and not df_v[df_v["Periodo"] != "Sin Fecha"].empty:
+        df_t = (
+            df_v[df_v["Periodo"] != "Sin Fecha"]
+            .groupby(["Periodo", "Servicio"])
+            .size()
+            .reset_index(name="Frecuencia")
+        )
         fig_t = px.line(
             df_t,
             x="Periodo",
@@ -499,10 +525,14 @@ with t_tiempo:
             markers=True,
             line_shape="linear",
         )
-        fig_t.update_layout(margin=dict(l=0, r=0, t=20, b=20))
+        fig_t.update_layout(
+            margin=dict(l=0, r=0, t=20, b=20),
+            xaxis_title="Período (Mes)",
+            yaxis_title="Cantidad de SNC"
+        )
         st.plotly_chart(fig_t, use_container_width=True)
     else:
-        st.info("No hay suficientes datos temporales cargados.")
+        st.info("No hay suficientes datos temporales cargados para el filtro actual.")
 
 with t_personas:
     opciones_servicio_personal = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
