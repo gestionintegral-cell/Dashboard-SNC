@@ -128,6 +128,7 @@ st.markdown(
         z-index: 999999 !important;
     }
 
+    /* Estilo del botón flotante */
     div[data-testid="stPopover"] > button {
         width: auto !important;
         min-width: 180px !important;
@@ -257,7 +258,6 @@ if st.sidebar.button("🔄 Restablecer Filtros", use_container_width=True):
 
 df_f = df.copy()
 
-# Si el usuario no selecciona ninguna opción en un multiselect, se asume VER TODO.
 if sedes_seleccionadas and col_sede:
     df_f = df_f[df_f[col_sede[0]].isin(sedes_seleccionadas)]
 if servicios_seleccionados:
@@ -265,7 +265,6 @@ if servicios_seleccionados:
 if periodos_seleccionados:
     df_f = df_f[df_f["Periodo"].astype(str).isin(periodos_seleccionados)]
 
-# Asignación segura del texto de búsqueda para el bot IA
 if not df_f.empty:
     df_f["_search_text"] = df_f.astype(str).fillna("").apply(lambda r: " ".join(r), axis=1)
 else:
