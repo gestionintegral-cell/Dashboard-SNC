@@ -41,7 +41,7 @@ def get_base64_image(ruta_archivo):
 
 
 def parse_smart_dates(series):
-    """Parsea inteligentemente fechas mixtas (texto, Excel datetime, guiones especiales)."""
+    """Parsea inteligentemente fechas mixtas en formato YYYY-MM-DD."""
     s_dt = pd.to_datetime(series, errors="coerce")
     mask_nat = s_dt.isna() & series.notna()
     if mask_nat.any():
@@ -52,15 +52,13 @@ def parse_smart_dates(series):
             .str.replace("—", "-")
             .str.strip()
         )
-        s_dt[mask_nat] = pd.to_datetime(cleaned_str, dayfirst=True, errors="coerce")
+        s_dt[mask_nat] = pd.to_datetime(cleaned_str, dayfirst=False, errors="coerce")
     return s_dt
 
 
 def es_estado_cerrado(val):
-    """Identifica si el estado del registro es CERRADA o CERRADO."""
     if pd.isna(val):
         return False
-
     val_str = (
         str(val)
         .strip()
@@ -71,12 +69,10 @@ def es_estado_cerrado(val):
         .replace("Ó", "O")
         .replace("Ú", "U")
     )
-
     return val_str in ["CERRADA", "CERRADO", "SI", "TRUE", "1"] or "CERRAD" in val_str
 
 
 def es_afirmativo(val):
-    """Normaliza y valida banderas auxiliares (Acción coyuntural, Incidente, etc.)."""
     if pd.isna(val):
         return False
     val_str = (
@@ -98,7 +94,6 @@ def es_afirmativo(val):
 st.markdown(
     """
     <style>
-    /* Tarjetas de métricas */
     .metric-card {
         background-color: #FFFFFF;
         border-left: 4px solid #1A2B6D;
@@ -123,7 +118,6 @@ st.markdown(
         margin-top: 2px;
     }
 
-    /* Fijar contenedor del Popover flotante a la derecha abajo */
     div[data-testid="stPopover"] {
         position: fixed !important;
         bottom: 30px !important;
@@ -132,7 +126,6 @@ st.markdown(
         z-index: 999999 !important;
     }
 
-    /* Estilo del botón flotante */
     div[data-testid="stPopover"] > button {
         width: auto !important;
         min-width: 180px !important;
@@ -200,8 +193,7 @@ def cargar_base_datos():
     ]
     if col_fecha:
         df_total["Fecha_DT"] = parse_smart_dates(df_total[col_fecha[0]])
-        df_total["Periodo"] = df_total["Fecha_DT"].dt.strftime("%Y-%m")
-        df_total["Periodo"] = df_total["Periodo"].fillna("Sin Fecha")
+        df_total["Periodo"] = df_total["Fecha_DT"].dt.strftime("%Y-%m").fillna("Sin Fecha")
     else:
         df_total["Periodo"] = "Sin Fecha"
 
@@ -219,7 +211,7 @@ except Exception as e:
     st.stop()
 
 # ---------------------------------------------------------
-# 6. MAPEO PRECISO Y EXACTO DE COLUMNAS SEGÚN ESTRUCTURA
+# 6. MAPEO PRECISO DE COLUMNAS
 # ---------------------------------------------------------
 col_sede = [c for c in df.columns if "SEDE" in c.upper()]
 col_estado = [c for c in df.columns if c.strip().lower() == "estado"]
@@ -242,12 +234,12 @@ if not col_desc:
     ]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS GLOBALES DE LA SIDEBAR (CON TIEMPO)
+# 7. FILTROS DINÁMICOS EN SIDEBAR (INCLUYE PERÍODO)
 # ---------------------------------------------------------
 sedes_disponibles = list(df[col_sede[0]].dropna().unique()) if col_sede else []
 servicios_disponibles = list(df["Servicio"].dropna().unique())
 
-periodos_validos = sorted([p for p in df["Periodo"].unique() if p != "Sin Fecha"], reverse=True)
+periodos_validos = sorted([p for p in df["Periodo"].unique() if p != "Sin Fecha"], reverse=False)
 if "Sin Fecha" in df["Periodo"].values:
     periodos_validos.append("Sin Fecha")
 
@@ -258,7 +250,7 @@ servicios_seleccionados = st.sidebar.multiselect(
     "Servicio / Área", servicios_disponibles, default=servicios_disponibles
 )
 periodos_seleccionados = st.sidebar.multiselect(
-    "📅 Período (Mes/Año)", periodos_validos, default=periodos_validos
+    "📅 Período (Año-Mes)", periodos_validos, default=periodos_validos
 )
 
 df_f = df.copy()
@@ -267,9 +259,8 @@ if sedes_seleccionadas and col_sede:
 if servicios_seleccionados:
     df_f = df_f[df_f["Servicio"].isin(servicios_seleccionados)]
 if periodos_seleccionados:
-    df_f = df_f[df_f["Periodo"].isin(periodos_seleccionados)]
+    df_f = df_f[df_f["Periodo"].astype(str).isin(periodos_seleccionados)]
 
-# Índice de búsqueda ultrarrápido
 df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
 
 # ---------------------------------------------------------
@@ -406,6 +397,7 @@ t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     ]
 )
 
+# PESTAÑA 1: PROCESOS / ÁREAS Y HALLAZGOS (LIMPIO Y SIN APILAMIENTOS)
 with t_procesos:
     st.markdown("##### Selección de servicio a detallar")
     servicios_proceso_opt = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
@@ -423,9 +415,6 @@ with t_procesos:
 
     col_left, col_right = st.columns(2)
 
-    # ---------------------------------------------------------
-    # GRÁFICO 1: INCIDENCIAS POR PROCESO / ÁREA (Limpio y legible)
-    # ---------------------------------------------------------
     with col_left:
         st.markdown("##### Incidencias por Área / Proceso Específico")
         if col_proceso:
@@ -436,7 +425,6 @@ with t_procesos:
             ].copy()
 
             if not df_p_data.empty:
-                # Conteo total por proceso ordenado de mayor a menor
                 df_p = (
                     df_p_data[col_proceso[0]]
                     .value_counts()
@@ -454,10 +442,7 @@ with t_procesos:
                     color="Eventos",
                     color_continuous_scale=["#B3C5E7", "#1A2B6D"],
                 )
-                fig_p.update_traces(
-                    textposition="outside",
-                    cliponaxis=False
-                )
+                fig_p.update_traces(textposition="outside", cliponaxis=False)
                 fig_p.update_layout(
                     yaxis={"autorange": "reversed", "title": ""},
                     xaxis={"title": "Total de Eventos"},
@@ -470,9 +455,6 @@ with t_procesos:
         else:
             st.warning("No se encontró la columna de Proceso/Área.")
 
-    # ---------------------------------------------------------
-    # GRÁFICO 2: HALLAZGOS RECURRENTES (Limpio y directo)
-    # ---------------------------------------------------------
     with col_right:
         st.markdown("##### Descripción de Hallazgos Recurrentes")
         if col_desc:
@@ -483,7 +465,6 @@ with t_procesos:
             ].copy()
 
             if not df_d_data.empty:
-                # Conteo total de hallazgos sin apilamientos confusos
                 df_d = (
                     df_d_data[col_desc[0]]
                     .value_counts()
@@ -501,10 +482,7 @@ with t_procesos:
                     color="Frecuencia",
                     color_continuous_scale=["#FFE4C4", "#F58220"],
                 )
-                fig_d.update_traces(
-                    textposition="outside",
-                    cliponaxis=False
-                )
+                fig_d.update_traces(textposition="outside", cliponaxis=False)
                 fig_d.update_layout(
                     yaxis={"autorange": "reversed", "title": ""},
                     xaxis={"title": "Frecuencia Total"},
@@ -517,44 +495,54 @@ with t_procesos:
         else:
             st.warning("No se encontró la columna de Descripción de SNC.")
 
-    # ---------------------------------------------------------
-    # SECCIÓN INFERIOR: EVOLUCIÓN MENSUAL DEL SERVICIO SELECCIONADO
-    # ---------------------------------------------------------
-    st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
-    st.markdown("##### 📈 Comportamiento Mensual de las Salidas No Conformes")
+    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+    if col_momento:
+        st.markdown("##### Detección del Evento por Etapa del Servicio")
+        fig_m = px.histogram(
+            df_proc_view,
+            x="Servicio",
+            color=col_momento[0],
+            barmode="group",
+            color_discrete_sequence=px.colors.qualitative.Set2,
+        )
+        fig_m.update_layout(margin=dict(l=0, r=0, t=20, b=20))
+        st.plotly_chart(fig_m, use_container_width=True)
 
-    if "Periodo" in df_proc_view.columns and not df_proc_view[df_proc_view["Periodo"] != "Sin Fecha"].empty:
-        df_time_focal = (
-            df_proc_view[df_proc_view["Periodo"] != "Sin Fecha"]
-            .groupby(["Periodo", col_desc[0] if col_desc else "Servicio"])
+# PESTAÑA 2: EVOLUCIÓN TEMPORAL
+with t_tiempo:
+    st.markdown("##### Comportamiento Mensual de Registros por Servicio")
+    
+    df_valid_time = df_v[df_v["Periodo"].astype(str) != "Sin Fecha"].copy()
+    
+    if not df_valid_time.empty:
+        df_t = (
+            df_valid_time.groupby(["Periodo", "Servicio"])
             .size()
-            .reset_index(name="Cantidad")
+            .reset_index(name="Frecuencia")
+            .sort_values(by="Periodo")
         )
         
-        # Gráfica de evolución temporal por hallazgo/servicio
-        fig_tf = px.bar(
-            df_time_focal,
+        fig_t = px.line(
+            df_t,
             x="Periodo",
-            y="Cantidad",
-            color=col_desc[0] if col_desc else "Servicio",
-            barmode="group",
-            text="Cantidad",
-            color_discrete_sequence=px.colors.qualitative.Safe,
+            y="Frecuencia",
+            color="Servicio",
+            markers=True,
+            line_shape="linear",
+            color_discrete_sequence=px.colors.qualitative.Bold,
         )
-        fig_tf.update_traces(textposition="outside")
-        fig_tf.update_layout(
-            xaxis_title="Mes / Período",
-            yaxis_title="Cantidad de Casos",
-            legend_title_text="Causa / Hallazgo",
-            margin=dict(l=20, r=20, t=20, b=20)
+        fig_t.update_traces(line_width=3, marker_size=8)
+        fig_t.update_layout(
+            margin=dict(l=20, r=20, t=20, b=20),
+            xaxis_title="Período (Mes/Año)",
+            yaxis_title="Cantidad de Registros SNC",
+            legend_title_text="Servicio / Área"
         )
-        st.plotly_chart(fig_tf, use_container_width=True)
+        st.plotly_chart(fig_t, use_container_width=True)
     else:
-        st.info("No hay suficientes registros con fecha en la selección actual.")
+        st.info("No hay suficientes registros con fecha válida para el filtro seleccionado.")
 
-# ---------------------------------------------------------
-# PESTAÑA: GESTIÓN POR PERSONAL
-# ---------------------------------------------------------
+# PESTAÑA 3: GESTIÓN POR PERSONAL
 with t_personas:
     opciones_servicio_personal = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
     servicio_personal_sel = st.selectbox(
@@ -644,6 +632,7 @@ with t_personas:
             else:
                 st.info("No hay registros para mostrar.")
 
+# PESTAÑA 4: TABLA
 with t_tabla:
     st.markdown(f"##### Registros ({segmento})")
     df_export = df_v.drop(columns=["_search_text"], errors="ignore")
