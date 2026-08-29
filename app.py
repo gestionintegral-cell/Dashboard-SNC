@@ -57,8 +57,10 @@ def parse_smart_dates(series):
 
 
 def es_estado_cerrado(val):
+    """Identifica si el estado del registro es CERRADA o CERRADO."""
     if pd.isna(val):
         return False
+
     val_str = (
         str(val)
         .strip()
@@ -69,10 +71,12 @@ def es_estado_cerrado(val):
         .replace("Ó", "O")
         .replace("Ú", "U")
     )
+
     return val_str in ["CERRADA", "CERRADO", "SI", "TRUE", "1"] or "CERRAD" in val_str
 
 
 def es_afirmativo(val):
+    """Normaliza y valida banderas auxiliares (Acción coyuntural, Incidente, etc.)."""
     if pd.isna(val):
         return False
     val_str = (
@@ -94,6 +98,7 @@ def es_afirmativo(val):
 st.markdown(
     """
     <style>
+    /* Tarjetas de métricas */
     .metric-card {
         background-color: #FFFFFF;
         border-left: 4px solid #1A2B6D;
@@ -118,6 +123,7 @@ st.markdown(
         margin-top: 2px;
     }
 
+    /* Fijar contenedor del Popover flotante a la derecha abajo */
     div[data-testid="stPopover"] {
         position: fixed !important;
         bottom: 30px !important;
@@ -126,6 +132,7 @@ st.markdown(
         z-index: 999999 !important;
     }
 
+    /* Estilo del botón flotante */
     div[data-testid="stPopover"] > button {
         width: auto !important;
         min-width: 180px !important;
@@ -208,7 +215,7 @@ def cargar_base_datos():
 try:
     df = cargar_base_datos()
 except Exception as e:
-    st.error(f"No fue posible conectar con la base de datos: {e}")
+    st.error(f"No fue posible conectar con la base de datos de Google Sheets: {e}")
     st.stop()
 
 # ---------------------------------------------------------
@@ -262,6 +269,7 @@ if servicios_seleccionados:
 if periodos_seleccionados:
     df_f = df_f[df_f["Periodo"].isin(periodos_seleccionados)]
 
+# Índice de búsqueda ultrarrápido
 df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
 
 # ---------------------------------------------------------
@@ -424,7 +432,6 @@ with t_procesos:
             ].copy()
 
             if not df_p_data.empty:
-                # Agrupación desglosada por Proceso y por Período
                 df_p = (
                     df_p_data.groupby([col_proceso[0], "Periodo"])
                     .size()
@@ -534,6 +541,9 @@ with t_tiempo:
     else:
         st.info("No hay suficientes datos temporales cargados para el filtro actual.")
 
+# ---------------------------------------------------------
+# PESTAÑA: GESTIÓN POR PERSONAL
+# ---------------------------------------------------------
 with t_personas:
     opciones_servicio_personal = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
     servicio_personal_sel = st.selectbox(
