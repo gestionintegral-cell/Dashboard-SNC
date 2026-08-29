@@ -234,7 +234,7 @@ if not col_desc:
     ]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS EN SIDEBAR
+# 7. FILTROS DINÁMICOS EN SIDEBAR (SIN AUTO-SELECCIÓN)
 # ---------------------------------------------------------
 sedes_disponibles = list(df[col_sede[0]].dropna().unique()) if col_sede else []
 servicios_disponibles = list(df["Servicio"].dropna().unique())
@@ -243,17 +243,20 @@ periodos_validos = sorted([str(p) for p in df["Periodo"].unique() if str(p) != "
 if "Sin Fecha" in df["Periodo"].values:
     periodos_validos.append("Sin Fecha")
 
+# Se utiliza default=[] para que la app inicie limpia sin auto-marcar todo
 sedes_seleccionadas = st.sidebar.multiselect(
-    "Sede", sedes_disponibles, default=sedes_disponibles
+    "Sede", sedes_disponibles, default=[]
 )
 servicios_seleccionados = st.sidebar.multiselect(
-    "Servicio / Área", servicios_disponibles, default=servicios_disponibles
+    "Servicio / Área", servicios_disponibles, default=[]
 )
 periodos_seleccionados = st.sidebar.multiselect(
-    "📅 Período General (Año-Mes)", periodos_validos, default=periodos_validos
+    "📅 Período General (Año-Mes)", periodos_validos, default=[]
 )
 
 df_f = df.copy()
+
+# Si el usuario NO selecciona nada, se asume que desea ver TODOS los datos de ese campo.
 if sedes_seleccionadas and col_sede:
     df_f = df_f[df_f[col_sede[0]].isin(sedes_seleccionadas)]
 if servicios_seleccionados:
@@ -397,7 +400,7 @@ t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     ]
 )
 
-# PESTAÑA 1: PROCESOS / ÁREAS Y HALLAZGOS CON FILTRO DE MES ESPECÍFICO
+# PESTAÑA 1: PROCESOS Y HALLAZGOS CON FILTROS DINÁMICOS
 with t_procesos:
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
@@ -407,17 +410,23 @@ with t_procesos:
             options=servicios_proceso_opt,
             key="sb_analisis_proceso"
         )
+
+    df_base_servicio = (
+        df_v[df_v["Servicio"] == servicio_focal]
+        if servicio_focal != "Todos los servicios"
+        else df_v.copy()
+    )
+
     with col_sel2:
-        meses_proceso_opt = ["Todos los meses del período"] + sorted(list(df_v["Periodo"].unique()))
+        meses_disponibles_servicio = sorted(list(df_base_servicio["Periodo"].unique()))
+        meses_proceso_opt = ["Todos los meses del período"] + meses_disponibles_servicio
         mes_focal = st.selectbox(
-            "Filtrar mes específico para este análisis:",
+            "Filtrar mes específico para este servicio:",
             options=meses_proceso_opt,
             key="sb_analisis_mes"
         )
 
-    df_proc_view = df_v.copy()
-    if servicio_focal != "Todos los servicios":
-        df_proc_view = df_proc_view[df_proc_view["Servicio"] == servicio_focal]
+    df_proc_view = df_base_servicio.copy()
     if mes_focal != "Todos los meses del período":
         df_proc_view = df_proc_view[df_proc_view["Periodo"] == mes_focal]
 
@@ -516,7 +525,7 @@ with t_procesos:
         fig_m.update_layout(margin=dict(l=0, r=0, t=20, b=20))
         st.plotly_chart(fig_m, use_container_width=True)
 
-# PESTAÑA 2: EVOLUCIÓN TEMPORAL COMPLETA
+# PESTAÑA 2: EVOLUCIÓN TEMPORAL
 with t_tiempo:
     st.markdown("##### Comportamiento Mensual de Registros por Servicio")
     
