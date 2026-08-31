@@ -295,6 +295,7 @@ with t_tiempo:
             fig_bar = px.bar(df_tot_mes, x="Periodo", y="Cantidad", text="Cantidad", color="Cantidad", color_continuous_scale=["#B3C5E7", "#1A2B6D"], title="Volumen Total por Mes")
             fig_bar.update_traces(textposition="outside")
             fig_bar.update_layout(xaxis_title="Mes / Año", yaxis_title="SNC Reportadas", coloraxis_showscale=False)
+            fig_bar.update_xaxes(type='category') # <--- AJUSTE: Fuerza a mostrar solo el texto del mes
             st.plotly_chart(fig_bar, use_container_width=True)
 
         with col_t2:
@@ -303,6 +304,7 @@ with t_tiempo:
             fig_line = px.line(df_serv_mes, x="Periodo", y="Eventos", color="Servicio", markers=True, title="Comportamiento por Área (Línea de Tiempo)")
             fig_line.update_traces(line_width=3, marker_size=8)
             fig_line.update_layout(xaxis_title="Mes / Año", yaxis_title="Eventos", legend_title="Servicio")
+            fig_line.update_xaxes(type='category') # <--- AJUSTE: Fuerza a mostrar solo el texto del mes
             st.plotly_chart(fig_line, use_container_width=True)
     else:
         st.info("No existen registros con una fecha válida para visualizar la evolución temporal.")
