@@ -223,7 +223,7 @@ def cargar_base_datos():
         df_total["Periodo"] = df_total["Fecha_DT"].dt.to_period("M").astype(str)
         df_total["Periodo"] = df_total["Periodo"].replace("NaT", "SIN FECHA")
 
-        # Formatear la columna de fecha original para mostrar solo YYYY-MM-DD (sin hora)
+        # Formatear la columna de fecha original a formato YYYY-MM-DD (sin hora)
         df_total[col_fecha[0]] = df_total["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna("")
 
     for col in df_total.columns:
@@ -231,6 +231,13 @@ def cargar_base_datos():
             df_total[col] = df_total[col].astype(str)
 
     return df_total
+
+
+try:
+    df = cargar_base_datos()
+except Exception as e:
+    st.error(f"No fue posible conectar con la base de datos de Google Sheets: {e}")
+    st.stop()
 
 # ---------------------------------------------------------
 # 6. MAPEO PRECISO Y EXACTO DE COLUMNAS
