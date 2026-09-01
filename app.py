@@ -412,7 +412,7 @@ else:
 st.markdown("<hr style='margin:15px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 11. PESTAÑAS DE ANÁLISIS
+# 11. PESTAÑAS DE ANÁLISIS (SIN SELECTORES REDUNDANTES)
 # ---------------------------------------------------------
 t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     [
@@ -424,25 +424,11 @@ t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
 )
 
 with t_procesos:
-    st.markdown("##### Selección de servicio a detallar")
-    servicios_proceso_opt = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
-    servicio_focal = st.selectbox(
-        "Filtrar análisis por servicio:",
-        options=servicios_proceso_opt,
-        key="sb_analisis_proceso"
-    )
-
-    df_proc_view = (
-        df_v[df_v["Servicio"] == servicio_focal]
-        if servicio_focal != "Todos los servicios"
-        else df_v.copy()
-    )
-
     col_left, col_right = st.columns(2)
     with col_left:
         st.markdown("##### Incidencias por Área / Proceso Específico")
         if col_proceso:
-            df_p_data = df_proc_view[df_proc_view[col_proceso[0]].astype(str).str.strip() != ""].copy()
+            df_p_data = df_v[df_v[col_proceso[0]].astype(str).str.strip() != ""].copy()
             df_p_data = df_p_data[df_p_data[col_proceso[0]].notna() & (df_p_data[col_proceso[0]] != "nan")]
 
             df_p = (
@@ -480,7 +466,7 @@ with t_procesos:
     with col_right:
         st.markdown("##### Descripción de Hallazgos Recurrentes")
         if col_desc:
-            df_d_data = df_proc_view[df_proc_view[col_desc[0]].astype(str).str.strip() != ""].copy()
+            df_d_data = df_v[df_v[col_desc[0]].astype(str).str.strip() != ""].copy()
             df_d_data = df_d_data[df_d_data[col_desc[0]].notna() & (df_d_data[col_desc[0]] != "nan")]
 
             df_d = df_d_data[col_desc[0]].value_counts().reset_index().head(8)
@@ -533,28 +519,15 @@ with t_tiempo:
         st.info("No hay suficientes datos temporales cargados.")
 
 with t_personas:
-    opciones_servicio_personal = ["Todos los servicios"] + sorted(list(df_v["Servicio"].unique()))
-    servicio_personal_sel = st.selectbox(
-        "Filtrar por servicio:",
-        options=opciones_servicio_personal,
-        key="sb_gestion_personal"
-    )
-
-    df_personal_view = (
-        df_v[df_v["Servicio"] == servicio_personal_sel]
-        if servicio_personal_sel != "Todos los servicios"
-        else df_v.copy()
-    )
-
     p_col1, p_col2 = st.columns(2)
 
     with p_col1:
         st.markdown("##### Eventos por Colaborador")
         if col_colaborador:
-            df_c_data = df_personal_view[
-                df_personal_view[col_colaborador[0]].notna()
-                & (df_personal_view[col_colaborador[0]].astype(str).str.strip() != "")
-                & (df_personal_view[col_colaborador[0]].astype(str).str.lower() != "nan")
+            df_c_data = df_v[
+                df_v[col_colaborador[0]].notna()
+                & (df_v[col_colaborador[0]].astype(str).str.strip() != "")
+                & (df_v[col_colaborador[0]].astype(str).str.lower() != "nan")
             ]
             df_c = (
                 df_c_data[col_colaborador[0]]
@@ -571,67 +544,40 @@ with t_personas:
             st.warning("No se encontró la columna de Colaboradores.")
 
     with p_col2:
-        if servicio_personal_sel != "Todos los servicios":
-            st.markdown(f"##### Distribución por Colaborador ({servicio_personal_sel})")
-            if col_colaborador and not df_personal_view.empty:
-                df_pie_colab = (
-                    df_personal_view[col_colaborador[0]]
-                    .value_counts()
-                    .reset_index()
-                )
-                df_pie_colab.columns = ["Colaborador", "Registros"]
+        st.markdown("##### Distribución por Servicio")
+        if not df_v.empty:
+            df_pie_serv = (
+                df_v["Servicio"]
+                .value_counts()
+                .reset_index()
+            )
+            df_pie_serv.columns = ["Servicio", "Registros"]
 
-                fig_s = px.pie(
-                    df_pie_colab,
-                    names="Colaborador",
-                    values="Registros",
-                    hole=0.45,
-                    color_discrete_sequence=px.colors.qualitative.Set3,
-                )
-                fig_s.update_layout(
-                    margin=dict(l=10, r=10, t=20, b=20),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig_s, use_container_width=True)
-            else:
-                st.info("No hay registros para mostrar.")
+            fig_s = px.pie(
+                df_pie_serv,
+                names="Servicio",
+                values="Registros",
+                hole=0.45,
+                color_discrete_sequence=[
+                    "#1A2B6D",
+                    "#F58220",
+                    "#2A3F90",
+                    "#E2E8F0",
+                    "#38A169",
+                    "#DD6B20"
+                ],
+            )
+            fig_s.update_layout(
+                margin=dict(l=10, r=10, t=20, b=20),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig_s, use_container_width=True)
         else:
-            st.markdown("##### Distribución por Servicio")
-            if not df_personal_view.empty:
-                df_pie_serv = (
-                    df_personal_view["Servicio"]
-                    .value_counts()
-                    .reset_index()
-                )
-                df_pie_serv.columns = ["Servicio", "Registros"]
-
-                fig_s = px.pie(
-                    df_pie_serv,
-                    names="Servicio",
-                    values="Registros",
-                    hole=0.45,
-                    color_discrete_sequence=[
-                        "#1A2B6D",
-                        "#F58220",
-                        "#2A3F90",
-                        "#E2E8F0",
-                        "#38A169",
-                        "#DD6B20"
-                    ],
-                )
-                fig_s.update_layout(
-                    margin=dict(l=10, r=10, t=20, b=20),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig_s, use_container_width=True)
-            else:
-                st.info("No hay registros para mostrar.")
+            st.info("No hay registros para mostrar.")
 
 with t_tabla:
     st.markdown(f"##### Registros ({segmento})")
-    # Limpiar columnas técnicas y nulas antes de exportar o mostrar
     cols_a_ocultar = ["Fecha_DT", "Periodo", "_search_text"]
     cols_validas = [c for c in df_v.columns if c not in cols_a_ocultar and not c.startswith("Unnamed")]
     
