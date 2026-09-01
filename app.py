@@ -210,32 +210,27 @@ def cargar_base_datos():
 
     df_total = pd.concat(registros, ignore_index=True)
 
-    for col in df_total.columns:
-        if df_total[col].dtype == "object":
-            df_total[col] = df_total[col].astype(str)
-
     col_fecha = [
         c
         for c in df_total.columns
         if "fecha" in c.lower() and "identificaci" in c.lower()
     ]
     if col_fecha:
+        # Convertir a datetime para extraer el período
         df_total["Fecha_DT"] = pd.to_datetime(
             df_total[col_fecha[0]], errors="coerce"
         )
         df_total["Periodo"] = df_total["Fecha_DT"].dt.to_period("M").astype(str)
         df_total["Periodo"] = df_total["Periodo"].replace("NaT", "SIN FECHA")
-    else:
-        df_total["Periodo"] = "SIN FECHA"
+
+        # Formatear la columna de fecha original para mostrar solo YYYY-MM-DD (sin hora)
+        df_total[col_fecha[0]] = df_total["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna("")
+
+    for col in df_total.columns:
+        if df_total[col].dtype == "object":
+            df_total[col] = df_total[col].astype(str)
 
     return df_total
-
-
-try:
-    df = cargar_base_datos()
-except Exception as e:
-    st.error(f"No fue posible conectar con la base de datos de Google Sheets: {e}")
-    st.stop()
 
 # ---------------------------------------------------------
 # 6. MAPEO PRECISO Y EXACTO DE COLUMNAS
