@@ -7,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 # ---------------------------------------------------------
-# 1. CONFIGURACIÓN PRINCIPAL
+# 1. CONFIGURACIÓN PRINCIPAL DE LA INTERFAZ
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="COLMEDICOS | Control de SNC",
@@ -72,81 +72,71 @@ def es_afirmativo(val):
 
 
 # ---------------------------------------------------------
-# 3. ESTILOS CSS - TABLER DARK UI
+# 3. ESTILOS CSS PERSONALIZADOS ESTILO TABLER / SAAS
 # ---------------------------------------------------------
 st.markdown(
     """
     <style>
-    /* Fondo general Tabler Dark UI */
+    /* Fondo general tipo Tabler UI */
     .stApp {
-        background-color: #0f172a !important;
-        color: #f8fafc !important;
+        background-color: #F8FAFC !important;
     }
 
-    /* Sidebar modo oscuro */
-    section[data-testid="stSidebar"] {
-        background-color: #1e293b !important;
-        border-right: 1px solid #334155 !important;
-    }
-    section[data-testid="stSidebar"] * {
-        color: #f8fafc !important;
-    }
-
-    /* Tarjetas de Métricas estilo Tabler Dark */
+    /* Tarjetas de métricas */
     .metric-card {
-        background-color: #1e293b !important;
-        border: 1px solid #334155 !important;
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
         border-radius: 12px !important;
-        padding: 18px 22px !important;
-        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.3) !important;
-        border-left: 5px solid #3b82f6 !important;
+        padding: 16px 20px !important;
+        box-shadow: 0px 1px 3px rgba(15, 23, 42, 0.05) !important;
+        border-left: 5px solid #1A2B6D !important;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     .metric-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.4) !important;
+        box-shadow: 0px 4px 12px rgba(15, 23, 42, 0.08) !important;
     }
     .metric-card-accent {
-        border-left: 5px solid #f97316 !important;
+        border-left: 5px solid #F58220 !important;
     }
     .metric-title {
         font-size: 11px !important;
-        color: #94a3b8 !important;
+        color: #64748B !important;
         font-weight: 700 !important;
         text-transform: uppercase !important;
         letter-spacing: 0.6px !important;
     }
     .metric-value {
-        font-size: 28px !important;
-        color: #f8fafc !important;
+        font-size: 26px !important;
+        color: #0F172A !important;
         font-weight: 800 !important;
         margin-top: 4px !important;
     }
 
-    /* Píldoras / Radio Buttons en fondo oscuro */
+    /* Píldoras / Radio Buttons Estilo Tabler */
     div[data-testid="stRadio"] > div {
-        background-color: #1e293b;
-        padding: 6px;
+        background-color: #FFFFFF;
+        padding: 4px;
         border-radius: 10px;
-        border: 1px solid #334155;
+        border: 1px solid #E2E8F0;
     }
 
-    /* Tabs oscuras estilo Tabler */
+    /* Pestañas (Tabs) Estilizadas */
     button[data-baseweb="tab"] {
         font-weight: 600 !important;
         font-size: 14px !important;
-        color: #94a3b8 !important;
+        color: #64748B !important;
         border-radius: 8px !important;
         padding: 10px 18px !important;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        color: #ffffff !important;
-        background-color: #1e293b !important;
-        box-shadow: 0px 2px 6px rgba(0,0,0,0.3) !important;
-        border-bottom: 3px solid #f97316 !important;
+        color: #1A2B6D !important;
+        background-color: #FFFFFF !important;
+        box-shadow: 0px 2px 4px rgba(0,0,0,0.04) !important;
+        border-bottom: 3px solid #F58220 !important;
     }
 
-    /* Botón del Chatbot */
+    /* Botón flotante del Chatbot */
     div[data-testid="stPopover"] {
         position: fixed !important;
         bottom: 30px !important;
@@ -155,16 +145,16 @@ st.markdown(
         z-index: 999999 !important;
     }
     div[data-testid="stPopover"] > button {
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        background: linear-gradient(135deg, #1A2B6D 0%, #0F172A 100%) !important;
         color: white !important;
         border-radius: 30px !important;
         padding: 12px 24px !important;
         font-weight: bold !important;
-        box-shadow: 0px 4px 14px rgba(0,0,0,0.5) !important;
+        box-shadow: 0px 4px 14px rgba(0,0,0,0.25) !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
     div[data-testid="stPopover"] > button:hover {
-        background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
+        background: linear-gradient(135deg, #F58220 0%, #D97706 100%) !important;
     }
     </style>
 """,
@@ -179,7 +169,7 @@ if ruta_logo:
     st.sidebar.image(ruta_logo, width=220)
 else:
     st.sidebar.markdown(
-        "<h2 style='color: #60a5fa; text-align: center;'>COLMEDICOS</h2>",
+        "<h2 style='color: #1A2B6D; text-align: center;'>COLMEDICOS</h2>",
         unsafe_allow_html=True,
     )
 
@@ -187,7 +177,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### Filtros Estratégicos")
 
 # ---------------------------------------------------------
-# 5. CARGA DE DATOS
+# 5. CARGA Y CONSOLIDACIÓN DINÁMICA DE DATOS
 # ---------------------------------------------------------
 @st.cache_data(ttl=60)
 def cargar_base_datos():
@@ -196,16 +186,19 @@ def cargar_base_datos():
     registros = []
 
     for hoja in xls.sheet_names:
+        # Ignorar la pestaña de la matriz de configuración / glosario
         if "matriz" in hoja.lower():
             continue
 
         df_hoja = pd.read_excel(xls, sheet_name=hoja)
         df_hoja.columns = [str(col).strip() for col in df_hoja.columns]
 
+        # Verificar que sea una hoja operativa real
         col_fecha_check = [c for c in df_hoja.columns if "fecha" in c.lower() and "identificaci" in c.lower()]
         if not col_fecha_check or df_hoja.empty:
             continue
 
+        # Eliminar filas donde la fecha o datos principales estén totalmente vacíos
         df_hoja = df_hoja.dropna(subset=col_fecha_check, how="all")
 
         clean_name = hoja.replace("_", " ").strip()
@@ -213,7 +206,7 @@ def cargar_base_datos():
         registros.append(df_hoja)
 
     if not registros:
-        raise ValueError("No se encontraron hojas operativas con registros.")
+        raise ValueError("No se encontraron hojas operativas de servicios con registros.")
 
     df_total = pd.concat(registros, ignore_index=True)
 
@@ -223,11 +216,14 @@ def cargar_base_datos():
         if "fecha" in c.lower() and "identificaci" in c.lower()
     ]
     if col_fecha:
+        # Convertir a datetime para extraer el período
         df_total["Fecha_DT"] = pd.to_datetime(
             df_total[col_fecha[0]], errors="coerce"
         )
         df_total["Periodo"] = df_total["Fecha_DT"].dt.to_period("M").astype(str)
         df_total["Periodo"] = df_total["Periodo"].replace("NaT", "SIN FECHA")
+
+        # Formatear la columna de fecha original a formato YYYY-MM-DD (sin hora)
         df_total[col_fecha[0]] = df_total["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna("")
 
     for col in df_total.columns:
@@ -240,11 +236,11 @@ def cargar_base_datos():
 try:
     df = cargar_base_datos()
 except Exception as e:
-    st.error(f"Error al conectar con la base de datos: {e}")
+    st.error(f"No fue posible conectar con la base de datos de Google Sheets: {e}")
     st.stop()
 
 # ---------------------------------------------------------
-# 6. MAPEO DE COLUMNAS
+# 6. MAPEO PRECISO Y EXACTO DE COLUMNAS
 # ---------------------------------------------------------
 col_sede = [c for c in df.columns if "SEDE" in c.upper()]
 col_estado = [c for c in df.columns if c.strip().lower() == "estado"]
@@ -267,7 +263,7 @@ if not col_desc:
     ]
 
 # ---------------------------------------------------------
-# 7. FILTROS EN SIDEBAR
+# 7. FILTROS DINÁMICOS GLOBAL DE LA SIDEBAR
 # ---------------------------------------------------------
 sedes_disponibles = sorted(list(df[col_sede[0]].dropna().unique())) if col_sede else []
 servicios_disponibles = sorted(list(df["Servicio"].dropna().unique()))
@@ -294,7 +290,7 @@ if periodos_seleccionados:
 df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
 
 # ---------------------------------------------------------
-# 8. BANNER INSTITUCIONAL MODO OSCURO
+# 8. BANNER INSTITUCIONAL
 # ---------------------------------------------------------
 ruta_banner = buscar_archivo_imagen("banner_colmedicos.png")
 banner_b64 = get_base64_image(ruta_banner)
@@ -304,19 +300,18 @@ if banner_b64:
         f"""
         <style>
         .custom-banner {{
-            background-image: linear-gradient(rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.95)), url("data:image/png;base64,{banner_b64}");
+            background-image: linear-gradient(rgba(26, 43, 109, 0.8), rgba(15, 23, 42, 0.9)), url("data:image/png;base64,{banner_b64}");
             background-size: cover;
             background-position: center;
             padding: 28px 32px;
             border-radius: 14px;
             color: white;
             margin-bottom: 22px;
-            border: 1px solid #334155;
-            box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.4);
+            box-shadow: 0px 8px 20px rgba(15, 23, 42, 0.12);
         }}
         .banner-title {{ font-size: 28px; font-weight: 700; color: #FFFFFF; margin: 0; }}
-        .banner-subtitle {{ font-size: 14px; color: #94a3b8; margin-top: 6px; }}
-        .banner-highlight {{ color: #f97316; font-weight: 600; font-style: italic; }}
+        .banner-subtitle {{ font-size: 14px; color: #E2E8F0; margin-top: 6px; }}
+        .banner-highlight {{ color: #F58220; font-weight: 600; font-style: italic; }}
         </style>
         
         <div class="custom-banner">
@@ -329,16 +324,16 @@ if banner_b64:
 else:
     st.markdown(
         """
-        <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 28px 32px; border-radius: 14px; color: white; margin-bottom: 22px; border: 1px solid #334155;">
+        <div style="background: linear-gradient(135deg, #1A2B6D 0%, #0F172A 100%); padding: 28px 32px; border-radius: 14px; color: white; margin-bottom: 22px;">
             <h2 style="margin: 0; font-weight: 700; font-size: 28px;">Control de Salidas No Conformes (SNC)</h2>
-            <p style="margin: 6px 0 0 0; color: #94a3b8; font-size: 14px;">Monitoreo del Sistema de Gestión de Calidad | <span style="color: #f97316; font-weight: 600; font-style: italic;">Las personas son nuestra razón de ser</span></p>
+            <p style="margin: 6px 0 0 0; color: #E2E8F0; font-size: 14px;">Monitoreo del Sistema de Gestión de Calidad | <span style="color: #F58220; font-weight: 600; font-style: italic;">Las personas son nuestra razón de ser</span></p>
         </div>
     """,
         unsafe_allow_html=True,
     )
 
 # ---------------------------------------------------------
-# 9. KPIS CLAVE
+# 9. MÉTRICAS Y KPIS CLAVE
 # ---------------------------------------------------------
 total_eventos = len(df_f)
 cerrados = (
@@ -414,10 +409,10 @@ elif segmento == "Incidentes" and col_incidente:
 else:
     df_v = df_f.copy()
 
-st.markdown("<hr style='margin:15px 0; border-color: #334155;'>", unsafe_allow_html=True)
+st.markdown("<hr style='margin:15px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 11. PESTAÑAS DE ANÁLISIS EN DARK MODE
+# 11. PESTAÑAS DE ANÁLISIS (SIN SELECTORES REDUNDANTES)
 # ---------------------------------------------------------
 t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
     [
@@ -452,11 +447,10 @@ with t_procesos:
                     orientation="h",
                     text="Eventos",
                     color="Eventos",
-                    color_continuous_scale=["#3b82f6", "#1d4ed8"],
+                    color_continuous_scale=["#B3C5E7", "#1A2B6D"],
                 )
                 fig_p.update_traces(textposition="outside")
                 fig_p.update_layout(
-                    template="plotly_dark",
                     yaxis={"autorange": "reversed"},
                     margin=dict(l=20, r=20, t=20, b=20),
                     showlegend=False,
@@ -486,11 +480,10 @@ with t_procesos:
                     orientation="h",
                     text="Frecuencia",
                     color="Frecuencia",
-                    color_continuous_scale=["#fdba74", "#ea580c"],
+                    color_continuous_scale=["#FFE4C4", "#F58220"],
                 )
                 fig_d.update_traces(textposition="outside")
                 fig_d.update_layout(
-                    template="plotly_dark",
                     yaxis={"autorange": "reversed"},
                     margin=dict(l=20, r=20, t=20, b=20),
                     showlegend=False,
@@ -515,9 +508,8 @@ with t_tiempo:
             markers=True,
             line_shape="linear",
         )
-        fig_t.update_traces(line_color="#60a5fa", line_width=3)
+        fig_t.update_traces(line_color="#1A2B6D", line_width=3)
         fig_t.update_layout(
-            template="plotly_dark",
             margin=dict(l=20, r=20, t=20, b=20),
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)'
@@ -567,16 +559,15 @@ with t_personas:
                 values="Registros",
                 hole=0.45,
                 color_discrete_sequence=[
-                    "#3b82f6",
-                    "#f97316",
-                    "#10b981",
-                    "#6366f1",
-                    "#ec4899",
-                    "#8b5cf6"
+                    "#1A2B6D",
+                    "#F58220",
+                    "#2A3F90",
+                    "#E2E8F0",
+                    "#38A169",
+                    "#DD6B20"
                 ],
             )
             fig_s.update_layout(
-                template="plotly_dark",
                 margin=dict(l=10, r=10, t=20, b=20),
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)'
@@ -601,7 +592,7 @@ with t_tabla:
     st.dataframe(df_export, use_container_width=True)
 
 # ---------------------------------------------------------
-# 12. CHATBOT FLOTANTE
+# 12. CHATBOT FLOTANTE OPTIMIZADO Y CORREGIDO
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
