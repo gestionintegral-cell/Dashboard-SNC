@@ -186,10 +186,27 @@ def cargar_base_datos():
     registros = []
 
     for hoja in xls.sheet_names:
+        # Ignorar la pestaña de la matriz de configuración / glosario
+        if "matriz" in hoja.lower():
+            continue
+
         df_hoja = pd.read_excel(xls, sheet_name=hoja)
         df_hoja.columns = [str(col).strip() for col in df_hoja.columns]
-        df_hoja["Servicio"] = hoja
+
+        # Verificar que sea una hoja operativa real
+        col_fecha_check = [c for c in df_hoja.columns if "fecha" in c.lower() and "identificaci" in c.lower()]
+        if not col_fecha_check or df_hoja.empty:
+            continue
+
+        # Eliminar filas donde la fecha o datos principales estén totalmente vacíos
+        df_hoja = df_hoja.dropna(subset=col_fecha_check, how="all")
+
+        clean_name = hoja.replace("_", " ").strip()
+        df_hoja["Servicio"] = clean_name
         registros.append(df_hoja)
+
+    if not registros:
+        raise ValueError("No se encontraron hojas operativas de servicios con registros.")
 
     df_total = pd.concat(registros, ignore_index=True)
 
@@ -244,7 +261,7 @@ if not col_desc:
     ]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS GLOBAL DE LA SIDEBAR (CON MESES RESTAURADO)
+# 7. FILTROS DINÁMICOS GLOBAL DE LA SIDEBAR
 # ---------------------------------------------------------
 sedes_disponibles = sorted(list(df[col_sede[0]].dropna().unique())) if col_sede else []
 servicios_disponibles = sorted(list(df["Servicio"].dropna().unique()))
@@ -612,7 +629,11 @@ with t_personas:
 
 with t_tabla:
     st.markdown(f"##### Registros ({segmento})")
-    df_export = df_v.drop(columns=["_search_text"], errors="ignore")
+    # Limpiar columnas técnicas y nulas antes de exportar o mostrar
+    cols_a_ocultar = ["Fecha_DT", "Periodo", "_search_text"]
+    cols_validas = [c for c in df_v.columns if c not in cols_a_ocultar and not c.startswith("Unnamed")]
+    
+    df_export = df_v[cols_validas].dropna(how="all")
     csv = df_export.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="Exportar vista a CSV",
