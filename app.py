@@ -174,7 +174,7 @@ else:
     )
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### Filtros Operativos")
+st.sidebar.markdown("### Filtros Estratégicos")
 
 # ---------------------------------------------------------
 # 5. CARGA Y CONSOLIDACIÓN DINÁMICA DE DATOS
@@ -206,7 +206,10 @@ def cargar_base_datos():
         df_total["Fecha_DT"] = pd.to_datetime(
             df_total[col_fecha[0]], errors="coerce"
         )
-        df_total["Periodo"] = df_total["Fecha_DT"].dt.to_period("M")
+        df_total["Periodo"] = df_total["Fecha_DT"].dt.to_period("M").astype(str)
+        df_total["Periodo"] = df_total["Periodo"].replace("NaT", "SIN FECHA")
+    else:
+        df_total["Periodo"] = "SIN FECHA"
 
     return df_total
 
@@ -241,10 +244,11 @@ if not col_desc:
     ]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS GLOBAL DE LA SIDEBAR
+# 7. FILTROS DINÁMICOS GLOBAL DE LA SIDEBAR (CON MESES RESTAURADO)
 # ---------------------------------------------------------
-sedes_disponibles = list(df[col_sede[0]].dropna().unique()) if col_sede else []
-servicios_disponibles = list(df["Servicio"].dropna().unique())
+sedes_disponibles = sorted(list(df[col_sede[0]].dropna().unique())) if col_sede else []
+servicios_disponibles = sorted(list(df["Servicio"].dropna().unique()))
+periodos_disponibles = sorted([p for p in df["Periodo"].dropna().unique() if p != "SIN FECHA"])
 
 sedes_seleccionadas = st.sidebar.multiselect(
     "Sede", sedes_disponibles, default=sedes_disponibles
@@ -252,12 +256,17 @@ sedes_seleccionadas = st.sidebar.multiselect(
 servicios_seleccionados = st.sidebar.multiselect(
     "Servicio / Área", servicios_disponibles, default=servicios_disponibles
 )
+periodos_seleccionados = st.sidebar.multiselect(
+    "Período (Año-Mes)", periodos_disponibles, default=periodos_disponibles
+)
 
 df_f = df.copy()
 if sedes_seleccionadas and col_sede:
     df_f = df_f[df_f[col_sede[0]].isin(sedes_seleccionadas)]
 if servicios_seleccionados:
     df_f = df_f[df_f["Servicio"].isin(servicios_seleccionados)]
+if periodos_seleccionados:
+    df_f = df_f[df_f["Periodo"].isin(periodos_seleccionados)]
 
 df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
 
@@ -484,8 +493,8 @@ with t_procesos:
 
 with t_tiempo:
     st.markdown("##### Comportamiento Mensual de Registros")
-    if "Periodo" in df_v.columns and not df_v["Periodo"].dropna().empty:
-        df_t = df_v.groupby("Periodo").size().reset_index(name="Frecuencia")
+    if "Periodo" in df_v.columns and not df_v[df_v["Periodo"] != "SIN FECHA"].empty:
+        df_t = df_v[df_v["Periodo"] != "SIN FECHA"].groupby("Periodo").size().reset_index(name="Frecuencia")
         df_t["Periodo"] = df_t["Periodo"].astype(str)
         fig_t = px.line(
             df_t,
