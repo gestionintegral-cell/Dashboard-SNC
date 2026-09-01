@@ -7,177 +7,125 @@ import plotly.express as px
 import streamlit as st
 
 # ---------------------------------------------------------
-# 1. CONFIGURACIÓN PRINCIPAL DE LA INTERFAZ
+# 1. CONFIGURACIÓN DE PÁGINA (WIDE + COLLAPSED SIDEBAR)
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="COLMEDICOS | Control de SNC",
-    page_icon="🏥",
+    page_title="COLMEDICOS | Quality Dashboard",
+    page_icon="📊",
     layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 # ---------------------------------------------------------
-# 2. FUNCIONES DE APOYO (HELPERS)
+# 2. CSS PARA LAYOUT Y COMPONENTES TABLER SAAS GRID
 # ---------------------------------------------------------
-def buscar_archivo_imagen(nombre_base):
-    posibles_rutas = [
-        nombre_base,
-        f".devcontainer/{nombre_base}",
-        f"{nombre_base}.png",
-        f".devcontainer/{nombre_base}.png",
-    ]
-    for ruta in posibles_rutas:
-        if os.path.exists(ruta):
-            return ruta
-    return None
-
-
-def get_base64_image(ruta_archivo):
-    if ruta_archivo and os.path.exists(ruta_archivo):
-        with open(ruta_archivo, "rb") as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    return ""
-
-
-def es_estado_cerrado(val):
-    if pd.isna(val):
-        return False
-    val_str = (
-        str(val)
-        .strip()
-        .upper()
-        .replace("Í", "I")
-        .replace("Á", "A")
-        .replace("É", "E")
-        .replace("Ó", "O")
-        .replace("Ú", "U")
-    )
-    return val_str in ["CERRADA", "CERRADO", "SI", "TRUE", "1"] or "CERRAD" in val_str
-
-
-def es_afirmativo(val):
-    if pd.isna(val):
-        return False
-    val_str = (
-        str(val)
-        .strip()
-        .upper()
-        .replace("Í", "I")
-        .replace("Á", "A")
-        .replace("É", "E")
-        .replace("Ó", "O")
-        .replace("Ú", "U")
-    )
-    return val_str in ["SI", "S", "TRUE", "1", "YES"]
-
-
-# ---------------------------------------------------------
-# 3. ESTILOS CSS PERSONALIZADOS ESTILO TABLER / SAAS
-# ---------------------------------------------------------
-st.markdown(
-    """
+st.markdown("""
     <style>
-    /* Fondo general tipo Tabler UI */
+    /* Ocultar elementos predeterminados de Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Contenedor principal con fondo oscuro Slate */
     .stApp {
-        background-color: #F8FAFC !important;
+        background-color: #0F172A !important;
+        color: #F8FAFC !important;
+    }
+    
+    /* Barra Superior de Navegación (Top Navbar) */
+    .top-navbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background-color: #1E293B;
+        padding: 12px 28px;
+        border-bottom: 1px solid #334155;
+        margin-bottom: 20px;
+        border-radius: 0 0 12px 12px;
+    }
+    .top-navbar .brand {
+        font-size: 18px;
+        font-weight: 800;
+        color: #60A5FA;
+        letter-spacing: 0.5px;
     }
 
-    /* Tarjetas de métricas */
-    .metric-card {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 12px !important;
-        padding: 16px 20px !important;
-        box-shadow: 0px 1px 3px rgba(15, 23, 42, 0.05) !important;
-        border-left: 5px solid #1A2B6D !important;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    /* Cards estilo Tabler Grid */
+    .tabler-card {
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        height: 100%;
     }
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0px 4px 12px rgba(15, 23, 42, 0.08) !important;
+    .tabler-card-header {
+        font-size: 11px;
+        font-weight: 700;
+        color: #94A3B8;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-bottom: 8px;
     }
-    .metric-card-accent {
-        border-left: 5px solid #F58220 !important;
+    .tabler-card-val {
+        font-size: 28px;
+        font-weight: 800;
+        color: #F8FAFC;
     }
-    .metric-title {
-        font-size: 11px !important;
-        color: #64748B !important;
-        font-weight: 700 !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.6px !important;
+    .tabler-card-sub {
+        font-size: 12px;
+        color: #10B981;
+        font-weight: 600;
     }
-    .metric-value {
-        font-size: 26px !important;
-        color: #0F172A !important;
-        font-weight: 800 !important;
-        margin-top: 4px !important;
-    }
-
-    /* Píldoras / Radio Buttons Estilo Tabler */
-    div[data-testid="stRadio"] > div {
-        background-color: #FFFFFF;
-        padding: 4px;
+    
+    /* Ajuste de Tabs horizontales superiores */
+    div[data-baseweb="tab-list"] {
+        background-color: #1E293B;
+        padding: 6px;
         border-radius: 10px;
-        border: 1px solid #E2E8F0;
+        border: 1px solid #334155;
+        gap: 8px;
     }
-
-    /* Pestañas (Tabs) Estilizadas */
     button[data-baseweb="tab"] {
-        font-weight: 600 !important;
-        font-size: 14px !important;
-        color: #64748B !important;
+        color: #94A3B8 !important;
         border-radius: 8px !important;
-        padding: 10px 18px !important;
+        padding: 8px 16px !important;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        color: #1A2B6D !important;
-        background-color: #FFFFFF !important;
-        box-shadow: 0px 2px 4px rgba(0,0,0,0.04) !important;
-        border-bottom: 3px solid #F58220 !important;
+        background-color: #2563EB !important;
+        color: #FFFFFF !important;
     }
-
-    /* Botón flotante del Chatbot */
+    
+    /* Floating Popover Chatbot */
     div[data-testid="stPopover"] {
         position: fixed !important;
-        bottom: 30px !important;
-        right: 30px !important;
-        width: auto !important;
+        bottom: 25px !important;
+        right: 25px !important;
         z-index: 999999 !important;
     }
     div[data-testid="stPopover"] > button {
-        background: linear-gradient(135deg, #1A2B6D 0%, #0F172A 100%) !important;
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
         color: white !important;
-        border-radius: 30px !important;
+        border-radius: 50px !important;
         padding: 12px 24px !important;
-        font-weight: bold !important;
-        box-shadow: 0px 4px 14px rgba(0,0,0,0.25) !important;
+        box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.5) !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
-    div[data-testid="stPopover"] > button:hover {
-        background: linear-gradient(135deg, #F58220 0%, #D97706 100%) !important;
-    }
     </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 4. LOGO EN LA BARRA LATERAL
+# 3. TOP NAVBAR Y ENCABEZADO SUPERIOR
 # ---------------------------------------------------------
-ruta_logo = buscar_archivo_imagen("logo_colmedicos.png")
-if ruta_logo:
-    st.sidebar.image(ruta_logo, width=220)
-else:
-    st.sidebar.markdown(
-        "<h2 style='color: #1A2B6D; text-align: center;'>COLMEDICOS</h2>",
-        unsafe_allow_html=True,
-    )
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Filtros Estratégicos")
+st.markdown("""
+    <div class="top-navbar">
+        <div class="brand">🏥 COLMEDICOS &nbsp;|&nbsp; <span style="font-size: 13px; color: #94A3B8; font-weight: 400;">Control de Salidas No Conformes (SNC)</span></div>
+        <div style="font-size: 13px; color: #F97316; font-weight: 600;">Las personas son nuestra razón de ser</div>
+    </div>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 5. CARGA Y CONSOLIDACIÓN DINÁMICA DE DATOS
+# 4. CARGA DE DATOS
 # ---------------------------------------------------------
 @st.cache_data(ttl=60)
 def cargar_base_datos():
@@ -186,428 +134,203 @@ def cargar_base_datos():
     registros = []
 
     for hoja in xls.sheet_names:
-        # Ignorar la pestaña de la matriz de configuración / glosario
         if "matriz" in hoja.lower():
             continue
-
         df_hoja = pd.read_excel(xls, sheet_name=hoja)
         df_hoja.columns = [str(col).strip() for col in df_hoja.columns]
-
-        # Verificar que sea una hoja operativa real
         col_fecha_check = [c for c in df_hoja.columns if "fecha" in c.lower() and "identificaci" in c.lower()]
         if not col_fecha_check or df_hoja.empty:
             continue
-
-        # Eliminar filas donde la fecha o datos principales estén totalmente vacíos
         df_hoja = df_hoja.dropna(subset=col_fecha_check, how="all")
-
-        clean_name = hoja.replace("_", " ").strip()
-        df_hoja["Servicio"] = clean_name
+        df_hoja["Servicio"] = hoja.replace("_", " ").strip()
         registros.append(df_hoja)
 
-    if not registros:
-        raise ValueError("No se encontraron hojas operativas de servicios con registros.")
-
     df_total = pd.concat(registros, ignore_index=True)
-
-    col_fecha = [
-        c
-        for c in df_total.columns
-        if "fecha" in c.lower() and "identificaci" in c.lower()
-    ]
+    col_fecha = [c for c in df_total.columns if "fecha" in c.lower() and "identificaci" in c.lower()]
     if col_fecha:
-        # Convertir a datetime para extraer el período
-        df_total["Fecha_DT"] = pd.to_datetime(
-            df_total[col_fecha[0]], errors="coerce"
-        )
+        df_total["Fecha_DT"] = pd.to_datetime(df_total[col_fecha[0]], errors="coerce")
         df_total["Periodo"] = df_total["Fecha_DT"].dt.to_period("M").astype(str)
         df_total["Periodo"] = df_total["Periodo"].replace("NaT", "SIN FECHA")
-
-        # Formatear la columna de fecha original a formato YYYY-MM-DD (sin hora)
         df_total[col_fecha[0]] = df_total["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna("")
-
-    for col in df_total.columns:
-        if df_total[col].dtype == "object":
-            df_total[col] = df_total[col].astype(str)
-
     return df_total
-
 
 try:
     df = cargar_base_datos()
 except Exception as e:
-    st.error(f"No fue posible conectar con la base de datos de Google Sheets: {e}")
+    st.error(f"Error al cargar datos: {e}")
     st.stop()
 
-# ---------------------------------------------------------
-# 6. MAPEO PRECISO Y EXACTO DE COLUMNAS
-# ---------------------------------------------------------
-col_sede = [c for c in df.columns if "SEDE" in c.upper()]
 col_estado = [c for c in df.columns if c.strip().lower() == "estado"]
-col_coyuntural = [
-    c for c in df.columns if "requiere acción coyuntural" in c.lower()
-]
+col_coyuntural = [c for c in df.columns if "requiere acción coyuntural" in c.lower()]
 col_incidente = [c for c in df.columns if "incidente" in c.lower()]
 col_proceso = [c for c in df.columns if "proceso donde se identifica" in c.lower()]
 col_colaborador = [c for c in df.columns if "colaborador que genera" in c.lower()]
-col_momento = [c for c in df.columns if "momento de identificación" in c.lower()]
-
 col_desc = [c for c in df.columns if "descripción de la salida no conforme" in c.lower()]
-if not col_desc:
-    col_desc = [
-        c
-        for c in df.columns
-        if any(p in c.lower() for p in ["descripci", "hallazgo", "detalle", "motivo"])
-        and "tratamiento" not in c.lower()
-        and "calidad" not in c.lower()
-    ]
+
+def es_estado_cerrado(val):
+    if pd.isna(val): return False
+    v = str(val).strip().upper()
+    return v in ["CERRADA", "CERRADO", "SI", "TRUE", "1"] or "CERRAD" in v
+
+def es_afirmativo(val):
+    if pd.isna(val): return False
+    return str(val).strip().upper() in ["SI", "S", "TRUE", "1", "YES"]
 
 # ---------------------------------------------------------
-# 7. FILTROS DINÁMICOS GLOBAL DE LA SIDEBAR
+# 5. FILTROS HORIZONTALES SUPERIORES (TOP CONTROL BAR)
 # ---------------------------------------------------------
-sedes_disponibles = sorted(list(df[col_sede[0]].dropna().unique())) if col_sede else []
-servicios_disponibles = sorted(list(df["Servicio"].dropna().unique()))
-periodos_disponibles = sorted([p for p in df["Periodo"].dropna().unique() if p != "SIN FECHA"])
-
-sedes_seleccionadas = st.sidebar.multiselect(
-    "Sede", sedes_disponibles, default=sedes_disponibles
-)
-servicios_seleccionados = st.sidebar.multiselect(
-    "Servicio / Área", servicios_disponibles, default=servicios_disponibles
-)
-periodos_seleccionados = st.sidebar.multiselect(
-    "Período (Año-Mes)", periodos_disponibles, default=periodos_disponibles
-)
+f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+with f_col1:
+    sedes = sorted(list(df['SEDE'].dropna().unique())) if 'SEDE' in df.columns else []
+    sel_sedes = st.multiselect("Sede:", sedes, default=sedes)
+with f_col2:
+    servicios = sorted(list(df['Servicio'].dropna().unique()))
+    sel_servicios = st.multiselect("Servicio / Área:", servicios, default=servicios)
+with f_col3:
+    periodos = sorted([p for p in df['Periodo'].unique() if p != "SIN FECHA"])
+    sel_periodos = st.multiselect("Período:", periodos, default=periodos)
+with f_col4:
+    segmento = st.selectbox("Estado Operacional:", ["Todos los registros", "Pendientes (Abiertas)", "Cerrados", "Con acción coyuntural", "Incidentes"])
 
 df_f = df.copy()
-if sedes_seleccionadas and col_sede:
-    df_f = df_f[df_f[col_sede[0]].isin(sedes_seleccionadas)]
-if servicios_seleccionados:
-    df_f = df_f[df_f["Servicio"].isin(servicios_seleccionados)]
-if periodos_seleccionados:
-    df_f = df_f[df_f["Periodo"].isin(periodos_seleccionados)]
-
-df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
-
-# ---------------------------------------------------------
-# 8. BANNER INSTITUCIONAL
-# ---------------------------------------------------------
-ruta_banner = buscar_archivo_imagen("banner_colmedicos.png")
-banner_b64 = get_base64_image(ruta_banner)
-
-if banner_b64:
-    st.markdown(
-        f"""
-        <style>
-        .custom-banner {{
-            background-image: linear-gradient(rgba(26, 43, 109, 0.8), rgba(15, 23, 42, 0.9)), url("data:image/png;base64,{banner_b64}");
-            background-size: cover;
-            background-position: center;
-            padding: 28px 32px;
-            border-radius: 14px;
-            color: white;
-            margin-bottom: 22px;
-            box-shadow: 0px 8px 20px rgba(15, 23, 42, 0.12);
-        }}
-        .banner-title {{ font-size: 28px; font-weight: 700; color: #FFFFFF; margin: 0; }}
-        .banner-subtitle {{ font-size: 14px; color: #E2E8F0; margin-top: 6px; }}
-        .banner-highlight {{ color: #F58220; font-weight: 600; font-style: italic; }}
-        </style>
-        
-        <div class="custom-banner">
-            <div class="banner-title">Control de Salidas No Conformes (SNC)</div>
-            <div class="banner-subtitle">Monitoreo del Sistema de Gestión de Calidad | <span class="banner-highlight">Las personas son nuestra razón de ser</span></div>
-        </div>
-    """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.markdown(
-        """
-        <div style="background: linear-gradient(135deg, #1A2B6D 0%, #0F172A 100%); padding: 28px 32px; border-radius: 14px; color: white; margin-bottom: 22px;">
-            <h2 style="margin: 0; font-weight: 700; font-size: 28px;">Control de Salidas No Conformes (SNC)</h2>
-            <p style="margin: 6px 0 0 0; color: #E2E8F0; font-size: 14px;">Monitoreo del Sistema de Gestión de Calidad | <span style="color: #F58220; font-weight: 600; font-style: italic;">Las personas son nuestra razón de ser</span></p>
-        </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-# ---------------------------------------------------------
-# 9. MÉTRICAS Y KPIS CLAVE
-# ---------------------------------------------------------
-total_eventos = len(df_f)
-cerrados = (
-    len(df_f[df_f[col_estado[0]].apply(es_estado_cerrado)])
-    if col_estado
-    else 0
-)
-pendientes = total_eventos - cerrados
-coyunturales = (
-    len(df_f[df_f[col_coyuntural[0]].apply(es_afirmativo)])
-    if col_coyuntural
-    else 0
-)
-incidentes = (
-    len(df_f[df_f[col_incidente[0]].apply(es_afirmativo)])
-    if col_incidente
-    else 0
-)
-tasa_cierre = (cerrados / total_eventos * 100) if total_eventos > 0 else 0.0
-
-m1, m2, m3, m4, m5 = st.columns(5)
-with m1:
-    st.markdown(
-        f'<div class="metric-card"><div class="metric-title">Total Registros</div><div class="metric-value">{total_eventos}</div></div>',
-        unsafe_allow_html=True,
-    )
-with m2:
-    st.markdown(
-        f'<div class="metric-card metric-card-accent"><div class="metric-title">Efectividad Cierre</div><div class="metric-value">{tasa_cierre:.1f}%</div></div>',
-        unsafe_allow_html=True,
-    )
-with m3:
-    st.markdown(
-        f'<div class="metric-card"><div class="metric-title">Pendientes (Abiertas)</div><div class="metric-value">{pendientes}</div></div>',
-        unsafe_allow_html=True,
-    )
-with m4:
-    st.markdown(
-        f'<div class="metric-card"><div class="metric-title">Acción Coyuntural</div><div class="metric-value">{coyunturales}</div></div>',
-        unsafe_allow_html=True,
-    )
-with m5:
-    st.markdown(
-        f'<div class="metric-card"><div class="metric-title">Incidentes</div><div class="metric-value">{incidentes}</div></div>',
-        unsafe_allow_html=True,
-    )
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# ---------------------------------------------------------
-# 10. SEGMENTACIÓN DE REGISTROS
-# ---------------------------------------------------------
-segmento = st.radio(
-    "Filtrar por estado operacional:",
-    [
-        "Todos los registros",
-        "Pendientes (Abiertas)",
-        "Cerrados",
-        "Con acción coyuntural",
-        "Incidentes",
-    ],
-    horizontal=True,
-)
+if sel_sedes and 'SEDE' in df_f.columns:
+    df_f = df_f[df_f['SEDE'].isin(sel_sedes)]
+if sel_servicios:
+    df_f = df_f[df_f['Servicio'].isin(sel_servicios)]
+if sel_periodos:
+    df_f = df_f[df_f['Periodo'].isin(sel_periodos)]
 
 if "Pendientes" in segmento and col_estado:
     df_v = df_f[~df_f[col_estado[0]].apply(es_estado_cerrado)]
 elif segmento == "Cerrados" and col_estado:
     df_v = df_f[df_f[col_estado[0]].apply(es_estado_cerrado)]
-elif segmento == "Con acción coyuntural" and col_coyuntural:
-    df_v = df_f[df_f[col_coyuntural[0]].apply(es_afirmativo)]
-elif segmento == "Incidentes" and col_incidente:
-    df_v = df_f[df_f[col_incidente[0]].apply(es_afirmativo)]
 else:
     df_v = df_f.copy()
 
-st.markdown("<hr style='margin:15px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+df_f["_search_text"] = df_f.astype(str).fillna("").agg(" ".join, axis=1)
 
 # ---------------------------------------------------------
-# 11. PESTAÑAS DE ANÁLISIS (SIN SELECTORES REDUNDANTES)
+# 6. FILA DE HERO & KPIS AL ESTILO TABLER SAAS
 # ---------------------------------------------------------
-t_procesos, t_tiempo, t_personas, t_tabla = st.tabs(
-    [
-        "Análisis por Proceso / Área",
-        "Evolución Temporal",
-        "Gestión por Personal",
-        "Consolidado de Registros",
-    ]
-)
+total_eventos = len(df_f)
+cerrados = len(df_f[df_f[col_estado[0]].apply(es_estado_cerrado)]) if col_estado else 0
+pendientes = total_eventos - cerrados
+tasa_cierre = (cerrados / total_eventos * 100) if total_eventos > 0 else 0.0
 
-with t_procesos:
-    col_left, col_right = st.columns(2)
-    with col_left:
-        st.markdown("##### Incidencias por Área / Proceso Específico")
+hero_col1, hero_col2, hero_col3 = st.columns([2, 1.2, 1.2])
+
+with hero_col1:
+    st.markdown(f"""
+        <div class="tabler-card" style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size: 20px; font-weight: 800; color: #F8FAFC;">Bienvenido al Panel de Calidad</div>
+                <div style="font-size: 13px; color: #94A3B8; margin-top: 4px;">Monitoreo en tiempo real de salidas no conformes.</div>
+                <div style="margin-top: 16px; display:flex; gap: 20px;">
+                    <div><span style="font-size: 11px; color:#94A3B8;">REGISTROS</span><br><b style="font-size:18px; color:#60A5FA;">{total_eventos}</b></div>
+                    <div><span style="font-size: 11px; color:#94A3B8;">EFECTIVIDAD</span><br><b style="font-size:18px; color:#10B981;">{tasa_cierre:.1f}%</b></div>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+with hero_col2:
+    # Gráfico de dona de Efectividad Cierre compacto estilo Tabler
+    fig_gauge = px.pie(
+        values=[cerrados, pendientes],
+        names=["Cerradas", "Pendientes"],
+        hole=0.7,
+        color_discrete_sequence=["#10B981", "#334155"]
+    )
+    fig_gauge.update_layout(
+        template="plotly_dark",
+        showlegend=False,
+        margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor='rgba(0,0,0,0)',
+        annotations=[dict(text=f"<b>{tasa_cierre:.0f}%</b>", x=0.5, y=0.5, font_size=20, showarrow=False, font_color="#F8FAFC")]
+    )
+    st.markdown('<div class="tabler-card"><div class="tabler-card-header">TASA DE CIERRE</div>', unsafe_allow_html=True)
+    st.plotly_chart(fig_gauge, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with hero_col3:
+    st.markdown(f"""
+        <div class="tabler-card">
+            <div class="tabler-card-header">ESTADO OPERACIONAL</div>
+            <div style="margin-top: 10px;">
+                <div style="display:flex; justify-content:space-between;"><span style="color:#94A3B8;">Cerrados:</span><b style="color:#10B981;">{cerrados}</b></div>
+                <div style="display:flex; justify-content:space-between; margin-top:8px;"><span style="color:#94A3B8;">Pendientes:</span><b style="color:#F97316;">{pendientes}</b></div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# 7. GRID DE ANÁLISIS ESTRUCTURADO (PESTAÑAS TABLER)
+# ---------------------------------------------------------
+t1, t2, t3, t4 = st.tabs(["📊 Análisis por Proceso", "📈 Evolución Temporal", "👥 Gestión por Personal", "📋 Consolidado"])
+
+with t1:
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("##### Incidencias por Área / Proceso")
         if col_proceso:
-            df_p_data = df_v[df_v[col_proceso[0]].astype(str).str.strip() != ""].copy()
-            df_p_data = df_p_data[df_p_data[col_proceso[0]].notna() & (df_p_data[col_proceso[0]] != "nan")]
-
-            df_p = (
-                df_p_data[col_proceso[0]]
-                .value_counts()
-                .reset_index()
-                .head(10)
-            )
-            df_p.columns = ["Proceso / Área", "Eventos"]
-
-            if not df_p.empty:
-                fig_p = px.bar(
-                    df_p,
-                    x="Eventos",
-                    y="Proceso / Área",
-                    orientation="h",
-                    text="Eventos",
-                    color="Eventos",
-                    color_continuous_scale=["#B3C5E7", "#1A2B6D"],
-                )
-                fig_p.update_traces(textposition="outside")
-                fig_p.update_layout(
-                    yaxis={"autorange": "reversed"},
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    showlegend=False,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig_p, use_container_width=True)
-            else:
-                st.info("No hay datos registrados para este proceso.")
-        else:
-            st.warning("No se encontró la columna de Proceso/Área.")
-
-    with col_right:
-        st.markdown("##### Descripción de Hallazgos Recurrentes")
+            df_p = df_v[col_proceso[0]].value_counts().reset_index().head(8)
+            df_p.columns = ["Proceso", "Eventos"]
+            fig_p = px.bar(df_p, x="Eventos", y="Proceso", orientation="h", text="Eventos", color_discrete_sequence=["#2563EB"])
+            fig_p.update_layout(template="plotly_dark", yaxis={"autorange": "reversed"}, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig_p, use_container_width=True)
+    with c2:
+        st.markdown("##### Causales Recurrentes")
         if col_desc:
-            df_d_data = df_v[df_v[col_desc[0]].astype(str).str.strip() != ""].copy()
-            df_d_data = df_d_data[df_d_data[col_desc[0]].notna() & (df_d_data[col_desc[0]] != "nan")]
-
-            df_d = df_d_data[col_desc[0]].value_counts().reset_index().head(8)
+            df_d = df_v[col_desc[0]].value_counts().reset_index().head(8)
             df_d.columns = ["Descripción", "Frecuencia"]
+            fig_d = px.bar(df_d, x="Frecuencia", y="Descripción", orientation="h", text="Frecuencia", color_discrete_sequence=["#F97316"])
+            fig_d.update_layout(template="plotly_dark", yaxis={"autorange": "reversed"}, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig_d, use_container_width=True)
 
-            if not df_d.empty:
-                fig_d = px.bar(
-                    df_d,
-                    x="Frecuencia",
-                    y="Descripción",
-                    orientation="h",
-                    text="Frecuencia",
-                    color="Frecuencia",
-                    color_continuous_scale=["#FFE4C4", "#F58220"],
-                )
-                fig_d.update_traces(textposition="outside")
-                fig_d.update_layout(
-                    yaxis={"autorange": "reversed"},
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    showlegend=False,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig_d, use_container_width=True)
-            else:
-                st.info("No hay descripciones de hallazgos para la selección actual.")
-        else:
-            st.warning("No se encontró la columna de Descripción de SNC.")
-
-with t_tiempo:
+with t2:
     st.markdown("##### Comportamiento Mensual de Registros")
     if "Periodo" in df_v.columns and not df_v[df_v["Periodo"] != "SIN FECHA"].empty:
         df_t = df_v[df_v["Periodo"] != "SIN FECHA"].groupby("Periodo").size().reset_index(name="Frecuencia")
-        df_t["Periodo"] = df_t["Periodo"].astype(str)
-        fig_t = px.line(
-            df_t,
-            x="Periodo",
-            y="Frecuencia",
-            markers=True,
-            line_shape="linear",
-        )
-        fig_t.update_traces(line_color="#1A2B6D", line_width=3)
-        fig_t.update_layout(
-            margin=dict(l=20, r=20, t=20, b=20),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
+        fig_t = px.line(df_t, x="Periodo", y="Frecuencia", markers=True)
+        fig_t.update_traces(line_color="#60A5FA", line_width=3)
+        fig_t.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_t, use_container_width=True)
-    else:
-        st.info("No hay suficientes datos temporales cargados.")
 
-with t_personas:
-    p_col1, p_col2 = st.columns(2)
-
-    with p_col1:
+with t3:
+    p1, p2 = st.columns(2)
+    with p1:
         st.markdown("##### Eventos por Colaborador")
         if col_colaborador:
-            df_c_data = df_v[
-                df_v[col_colaborador[0]].notna()
-                & (df_v[col_colaborador[0]].astype(str).str.strip() != "")
-                & (df_v[col_colaborador[0]].astype(str).str.lower() != "nan")
-            ]
-            df_c = (
-                df_c_data[col_colaborador[0]]
-                .value_counts()
-                .reset_index()
-            )
+            df_c = df_v[col_colaborador[0]].value_counts().reset_index()
             df_c.columns = ["Colaborador", "Registros"]
-
-            if not df_c.empty:
-                st.dataframe(df_c, use_container_width=True, hide_index=True)
-            else:
-                st.info("No hay colaboradores registrados para la selección.")
-        else:
-            st.warning("No se encontró la columna de Colaboradores.")
-
-    with p_col2:
+            st.dataframe(df_c, use_container_width=True, hide_index=True)
+    with p2:
         st.markdown("##### Distribución por Servicio")
-        if not df_v.empty:
-            df_pie_serv = (
-                df_v["Servicio"]
-                .value_counts()
-                .reset_index()
-            )
-            df_pie_serv.columns = ["Servicio", "Registros"]
+        df_pie = df_v["Servicio"].value_counts().reset_index()
+        df_pie.columns = ["Servicio", "Registros"]
+        fig_pie = px.pie(df_pie, names="Servicio", values="Registros", hole=0.45)
+        fig_pie.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-            fig_s = px.pie(
-                df_pie_serv,
-                names="Servicio",
-                values="Registros",
-                hole=0.45,
-                color_discrete_sequence=[
-                    "#1A2B6D",
-                    "#F58220",
-                    "#2A3F90",
-                    "#E2E8F0",
-                    "#38A169",
-                    "#DD6B20"
-                ],
-            )
-            fig_s.update_layout(
-                margin=dict(l=10, r=10, t=20, b=20),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)'
-            )
-            st.plotly_chart(fig_s, use_container_width=True)
-        else:
-            st.info("No hay registros para mostrar.")
-
-with t_tabla:
-    st.markdown(f"##### Registros ({segmento})")
-    cols_a_ocultar = ["Fecha_DT", "Periodo", "_search_text"]
-    cols_validas = [c for c in df_v.columns if c not in cols_a_ocultar and not c.startswith("Unnamed")]
-    
-    df_export = df_v[cols_validas].dropna(how="all")
-    csv = df_export.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="Exportar vista a CSV",
-        data=csv,
-        file_name="snc_colmedicos.csv",
-        mime="text/csv",
-    )
-    st.dataframe(df_export, use_container_width=True)
+with t4:
+    cols_validas = [c for c in df_v.columns if c not in ["Fecha_DT", "Periodo", "_search_text"] and not c.startswith("Unnamed")]
+    st.dataframe(df_v[cols_validas], use_container_width=True)
 
 # ---------------------------------------------------------
-# 12. CHATBOT FLOTANTE OPTIMIZADO Y CORREGIDO
+# 8. CHATBOT FLOTANTE INTEGRADOR CON IA
 # ---------------------------------------------------------
 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
 with st.popover("💬 Asistente IA SNC"):
     st.markdown("### 🤖 Asistente Virtual SNC")
-
     if not gemini_key:
-        gemini_key = st.text_input(
-            "Ingresa tu Gemini API Key:", type="password"
-        )
+        gemini_key = st.text_input("Ingresa tu Gemini API Key:", type="password")
 
     if gemini_key:
         try:
             genai.configure(api_key=gemini_key)
-
             if "gemini_messages" not in st.session_state:
                 st.session_state.gemini_messages = []
 
@@ -616,106 +339,21 @@ with st.popover("💬 Asistente IA SNC"):
                     st.markdown(msg["content"])
 
             if user_prompt := st.chat_input("Escribe tu pregunta..."):
-                st.session_state.gemini_messages.append(
-                    {"role": "user", "content": user_prompt}
-                )
+                st.session_state.gemini_messages.append({"role": "user", "content": user_prompt})
                 with st.chat_message("user"):
                     st.markdown(user_prompt)
 
-                palabras_ignorar = {
-                    "que", "del", "los", "las", "por", "con", "para", "documento",
-                    "cedula", "nit", "numero", "snc", "colmedicos", "hola", "como",
-                    "deberia", "tratar", "esta", "plan", "accion", "recomiendas",
-                    "genero", "generó", "este", "quien", "quienes", "mas", "incidencias",
-                    "usuarios", "colaboradores"
-                }
+                contexto_snc = f"Registros: {len(df_f)} | Tasa Cierre: {tasa_cierre:.1f}% | Pendientes: {pendientes} | Cerrados: {cerrados}"
+                model = genai.GenerativeModel("gemini-3.6-flash")
+                prompt_completo = f"{contexto_snc}\n\nPregunta: {user_prompt}"
 
-                tokens = re.findall(r"\b[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+\b", user_prompt)
-                terminos_busqueda = [
-                    t.lower()
-                    for t in tokens
-                    if t.lower() not in palabras_ignorar and len(t) >= 3
-                ]
+                with st.chat_message("assistant"):
+                    response_stream = model.generate_content(prompt_completo, stream=True)
+                    def stream_generator():
+                        for chunk in response_stream:
+                            yield chunk.text
+                    full_response = st.write_stream(stream_generator)
 
-                coincidencias = pd.DataFrame()
-
-                if terminos_busqueda:
-                    pattern = "|".join(terminos_busqueda)
-                    coincidencias = df_f[
-                        df_f["_search_text"].str.contains(
-                            pattern, case=False, na=False
-                        )
-                    ]
-
-                resumen_colaboradores = ""
-                if col_colaborador:
-                    top_colab = (
-                        df_f[col_colaborador[0]]
-                        .value_counts()
-                        .head(3)
-                        .to_dict()
-                    )
-                    resumen_colaboradores = "\nTOP COLABORADORES CON MÁS CASOS:\n"
-                    for colab, cant in top_colab.items():
-                        resumen_colaboradores += f"- {colab}: {cant}\n"
-
-                resumen_servicios = ""
-                top_serv = df_f["Servicio"].value_counts().head(3).to_dict()
-                resumen_servicios = "\nTOP SERVICIOS CON MÁS CASOS:\n"
-                for serv, cant in top_serv.items():
-                    resumen_servicios += f"- {serv}: {cant}\n"
-
-                contexto_especifico = ""
-                if not coincidencias.empty:
-                    cols_limpias = [
-                        c
-                        for c in df_f.columns
-                        if c not in ["Fecha_DT", "Periodo", "_search_text"]
-                    ]
-                    registros_encontrados = coincidencias[cols_limpias].head(
-                        3
-                    ).to_dict(orient="records")
-
-                    contexto_especifico = "\n\nREGISTROS ENCONTRADOS:\n"
-                    for idx, reg in enumerate(registros_encontrados, 1):
-                        contexto_especifico += f"\n--- Caso #{idx} ---\n"
-                        for k, v in reg.items():
-                            if pd.notna(v) and str(v).strip() != "":
-                                contexto_especifico += f"- {k}: {v}\n"
-
-                contexto_snc = f"""
-                Eres el Asistente de Gestión de Calidad (SNC) de COLMEDICOS.
-                Responde de forma concisa, directa y estructurada.
-                
-                DATOS DE LA SESIÓN:
-                - Registros: {len(df_f)} | Tasa Cierre: {tasa_cierre:.1f}%
-                - Pendientes (Abiertas): {pendientes} | Cerrados: {cerrados} | Coyunturales: {coyunturales} | Incidentes: {incidentes}
-                {resumen_colaboradores}
-                {resumen_servicios}
-                {contexto_especifico}
-                """
-
-                try:
-                    model = genai.GenerativeModel("gemini-3.6-flash")
-                    prompt_completo = (
-                        f"{contexto_snc}\n\nPregunta: {user_prompt}"
-                    )
-
-                    with st.chat_message("assistant"):
-                        response_stream = model.generate_content(
-                            prompt_completo, stream=True
-                        )
-
-                        def stream_generator():
-                            for chunk in response_stream:
-                                yield chunk.text
-
-                        full_response = st.write_stream(stream_generator)
-
-                    st.session_state.gemini_messages.append(
-                        {"role": "assistant", "content": full_response}
-                    )
-                except Exception as err:
-                    st.error(f"Error al procesar la respuesta con la IA: {err}")
-        except Exception as e:
-            st.error("API Key inválida o no configurada correctamente.")
+                st.session_state.gemini_messages.append({"role": "assistant", "content": full_response})
+        except Exception as err:
+            st.error(f"Error: {err}")
